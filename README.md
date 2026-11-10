@@ -1,3 +1,17 @@
-# Ledger work assistant
+# 费用与收款台账整理助手
 
-Initial repository setup.
+一个平台中立的试用技能，帮助使用者整理费用、收款等表格，保留来源并列出待核实事项。不能代替财务审核，不自动入账、付款、开票或发送。
+
+## 安装和使用
+
+下载本仓库后，将 `ledger-organizer` 文件夹按所用 Agent 平台的技能安装方式导入，或让支持读取文件的 Agent 阅读 `ledger-organizer/SKILL.md`。具体目录、自动加载、联网和文件访问能力因平台而异，需在目标环境测试。可先用虚构样例提供两张表、确认字段和规则，再要求保留来源、生成复核清单。
+
+技能内含有限测试的 Python 对账适配副本；运行需要 Python、pandas、openpyxl、PyYAML，实际依赖和平台权限须另行检查。其结果可选表格或附加结果项柱状图；结果项数量不等于交易笔数。脚本当前仅用虚构数据测试，不用于真实账目。
+
+## 按需发现其他技能
+
+当前任务缺少能力时，优先使用平台已有技能；必要时可用通用关键词进行只读搜索，评估候选后按平台权限与用户授权使用。搜索关键词会发送给外部服务，不应包含个人或业务数据。详情见 `ledger-organizer/references/skill-discovery.md`。
+
+## 第三方来源
+
+`ledger-organizer/vendor/` 附带第三方技能原文、许可及四个项目的源码文本节选，出处和限制见 `ledger-organizer/references/github-adapter.md`。第三方源码没有因封装而自动安装、运行或完成安全审查。
