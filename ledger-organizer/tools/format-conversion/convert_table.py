@@ -10,7 +10,7 @@ def sha(path):
     return h.hexdigest()
 
 
-def run(source,output,encoding='utf-8-sig',sheet=None):
+def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False):
     if os.path.realpath(source)==os.path.realpath(output):raise ValueError('输出不可覆盖输入')
     before=sha(source); src=os.path.splitext(source)[1].lower(); dst=os.path.splitext(output)[1].lower()
     if (src,dst)==('.csv','.xlsx'):
@@ -43,6 +43,8 @@ def run(source,output,encoding='utf-8-sig',sheet=None):
                 line=[]
                 for c in row:
                     if c.data_type in ('f','e'):raise ValueError('存在公式或错误值，不能安全转为 CSV')
+                    if (c.data_type=='d' or (c.data_type=='n' and c.value is not None and c.number_format.lower()!='general')) and not allow_display_loss:
+                        raise ValueError(f'{c.coordinate} 的数字或日期显示依赖格式；CSV 无法保存显示格式。请核对原表，如接受导出底层值可指定 --allow-display-loss')
                     v='' if c.value is None else str(c.value)
                     # CSV opened in spreadsheet software must not silently execute formulas.
                     if v.startswith(('=','+','@','\t','\r')) or (v.startswith('-') and not re.fullmatch(r'-\d+(?:\.\d+)?',v)):
@@ -59,5 +61,6 @@ def run(source,output,encoding='utf-8-sig',sheet=None):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('source');p.add_argument('output');p.add_argument('--encoding',default='utf-8-sig');p.add_argument('--sheet');a=p.parse_args()
-    print('转换完成，行数:',run(a.source,a.output,a.encoding,a.sheet))
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('source');p.add_argument('output');p.add_argument('--encoding',default='utf-8-sig');p.add_argument('--sheet');p.add_argument('--allow-display-loss',action='store_true',help='已确认接受 XLSX 数字/日期按底层值导出，不保留显示格式');a=p.parse_args()
+    print('转换完成，行数:',run(a.source,a.output,a.encoding,a.sheet,a.allow_display_loss))
+    if a.output.lower().endswith('.csv'):print('注意：CSV 不保存单元格类型或格式；用表格软件打开时请将编号等字段按文本导入，并对照原表复核。')

@@ -19,3 +19,8 @@
 `tools/format-conversion/convert_table.py` 使用 Python 与 openpyxl 本地运行；CSV→XLSX 将所有值按文本保存，默认 UTF-8（兼容 BOM），可显式选 utf-16、gb18030、gbk，空行或列数不齐拒绝。XLSX→CSV 默认仅单表，多表需 `--sheet`；拒绝合并、公式、错误值及可能被电子表格执行的文本。CSV 不保存格式、图片、公式、工作表与数字格式；Excel 的数值显示格式或在源文件中已丢失的前导零和精度无法恢复。输出独占创建、源哈希检查和结果回读不能证明内容本身正确。脚本使用 openpyxl，环境若无依赖须按实际权限处理；尚未覆盖复杂表格或真实资料。
 
 示例：`python tools/format-conversion/convert_table.py input.csv output.xlsx --encoding utf-8-sig`；`python tools/format-conversion/convert_table.py input.xlsx output.csv --sheet Sheet1`。
+
+## XLSX 显示格式和 CSV 数字（v0.27）
+XLSX → CSV 默认遇到日期或非 General 数字格式时停止并指出单元格，例如底层 123 以 `00000` 显示为 00123、百分比、金额小数位和日期。应让使用者确认所需的是原表显示还是底层值，并检查其他相关单元格；不能把底层值当成显示文本。如使用者明确接受底层值及格式丢失，可附加 `--allow-display-loss`，但仍会拒绝公式、错误值及其他不支持情况；日期按程序读取的值写出，不保证原显示。该检查不保证发现所有显示与底层值差异，也无法恢复原表已丢失的精度或前导零。
+
+CSV 字节本身不保存单元格类型；即使文件里保留了完整长编号与前导零，表格软件直接打开时仍可能自动转换或舍入。需要在软件导入时将编号列指定为文本，并与原件逐项复核；若需要明确保留文本类型，优先使用 XLSX 文本单元格。程序回读 CSV 只证明文件内容一致，不证明软件打开后的显示或精度。
