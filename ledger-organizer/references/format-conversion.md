@@ -13,3 +13,9 @@
 
 ## 数字和交付核验
 数字、编号、金额、表头和来源按 `document-to-excel.md` 逐项核对；不确定的字符标待核实，空值不当零。不因转换擅自修改金额、精度、币种或日期。输出前后检查源文件与目标文件，重新打开目标核对实际范围、页/表/行数量、重点数值和异常；对页面呈现和功能性未做的检查明确说明。只在实际完成、验证相应内容后才声明完整、可编辑、原样或无损。不得自动上传原始资料到额外服务。
+
+
+## 包内 CSV / XLSX 互转工具（v0.18）
+`tools/format-conversion/convert_table.py` 使用 Python 与 openpyxl 本地运行；CSV→XLSX 将所有值按文本保存，默认 UTF-8（兼容 BOM），可显式选 utf-16、gb18030、gbk，空行或列数不齐拒绝。XLSX→CSV 默认仅单表，多表需 `--sheet`；拒绝合并、公式、错误值及可能被电子表格执行的文本。CSV 不保存格式、图片、公式、工作表与数字格式；Excel 的数值显示格式或在源文件中已丢失的前导零和精度无法恢复。输出独占创建、源哈希检查和结果回读不能证明内容本身正确。脚本使用 openpyxl，环境若无依赖须按实际权限处理；尚未覆盖复杂表格或真实资料。
+
+示例：`python tools/format-conversion/convert_table.py input.csv output.xlsx --encoding utf-8-sig`；`python tools/format-conversion/convert_table.py input.xlsx output.csv --sheet Sheet1`。
