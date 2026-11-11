@@ -31,7 +31,7 @@ def lines(img):
     xs=clusters(np.flatnonzero((vm>0).sum(axis=0)>h*0.45))
     if not (2<=len(xs)<=31 and 2<=len(ys)<=101):raise ValueError('未找到单个完整直线网格，请人工处理')
     if min(np.diff(xs))<15 or min(np.diff(ys))<15:raise ValueError('网格过密或存在多余线条')
-    # Require each segment of every boundary; merged or broken cells fail closed.
+    # Require each detected boundary segment; entirely missing lines can remain undetected.
     for y in ys:
         for x1,x2 in zip(xs,xs[1:]):
             area=hm[max(0,y-2):min(h,y+3),x1+3:x2-2]
@@ -40,6 +40,16 @@ def lines(img):
         for y1,y2 in zip(ys,ys[1:]):
             area=vm[y1+3:y2-2,max(0,x-2):min(w,x+3)]
             if area.size==0 or (area>0).any(axis=1).mean()<0.8:raise ValueError('纵向网格不完整或存在合并单元格')
+    # Detect long partial lines hidden inside inferred cells. This is a conservative
+    # guard, not proof that every merged or invisible separator is detectable.
+    for y1,y2 in zip(ys,ys[1:]):
+        for x1,x2 in zip(xs,xs[1:]):
+            inner_v=vm[y1+3:y2-2,x1+4:x2-3]
+            inner_h=hm[y1+4:y2-3,x1+3:x2-2]
+            if inner_v.size and ((inner_v>0).sum(axis=0)>inner_v.shape[0]*0.70).any():
+                raise ValueError('单元格内部出现未识别竖线，可能存在合并或缺失边框')
+            if inner_h.size and ((inner_h>0).sum(axis=1)>inner_h.shape[1]*0.70).any():
+                raise ValueError('单元格内部出现未识别横线，可能存在合并或缺失边框')
     return xs,ys
 
 

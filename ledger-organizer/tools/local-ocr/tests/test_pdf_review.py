@@ -1,5 +1,5 @@
 """Synthetic PDF page-provenance tests; grid and OCR content are simulated."""
-import hashlib,importlib.util,json,tempfile,unittest
+import hashlib,importlib.util,json,tempfile,unittest,zipfile
 from pathlib import Path
 from PIL import Image
 from openpyxl import load_workbook
@@ -22,7 +22,9 @@ class PdfReview(unittest.TestCase):
     data={'来源sha256':sha(image),'OCR结果sha256':sha(ocr),'行数':1,'列数':1,'单元格':[{'行':1,'列':1,'识别文本':f'00{i}','边界_像素':[0,0,10,10]}],'未归属片段':[]}
     grid.write_text(json.dumps(data,ensure_ascii=False),encoding='utf8')
    self.assertEqual(export.run(pdf,pages,out),(2,2,0))
-   w=load_workbook(out,read_only=True);self.assertEqual(w['页001_待核对']['A1'].value,'001');self.assertEqual(w['页002_待核对']['A1'].value,'002');self.assertEqual(w['逐格复核']['A3'].value,2);w.close()
+   w=load_workbook(out,read_only=True);self.assertEqual(w['页001_待核对']['A1'].value,'001');self.assertEqual(w['页002_待核对']['A1'].value,'002');self.assertEqual(w['逐格复核']['A3'].value,2);self.assertNotIn('页001_原页预览',w.sheetnames);w.close()
+   preview=d/'preview.xlsx';self.assertEqual(export.run(pdf,pages,preview,True),(2,2,0));w=load_workbook(preview,read_only=True);self.assertIn('页001_原页预览',w.sheetnames);self.assertIn('页002_原页预览',w.sheetnames);w.close()
+   with zipfile.ZipFile(preview) as z:self.assertEqual(len([n for n in z.namelist() if n.startswith('xl/media/') and n.endswith('.png')]),2)
    with self.assertRaises(FileExistsError):export.run(pdf,pages,out)
    (pages/'page_0002_grid.json').unlink()
    with self.assertRaises(FileNotFoundError):export.run(pdf,pages,d/'incomplete.xlsx')

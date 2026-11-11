@@ -1,5 +1,9 @@
 """Collect page-specific OCR grid JSON into a traceable review workbook."""
-import argparse,hashlib,json
+import argparse,hashlib,json,zipfile
+from collections import Counter
+from io import BytesIO
+from PIL import Image as PILImage
+from openpyxl.drawing.image import Image as ExcelImage
 from pathlib import Path
 from openpyxl import Workbook,load_workbook
 
@@ -14,7 +18,7 @@ def append_text(ws,values,indices):
  for col in indices:
   if isinstance(ws.cell(ws.max_row,col).value,str):ws.cell(ws.max_row,col).data_type='s'
 
-def run(pdf,pages_dir,output):
+def run(pdf,pages_dir,output,embed_previews=False):
  pdf=Path(pdf).resolve();directory=Path(pages_dir).resolve();output=Path(output).resolve()
  if output.suffix.lower()!='.xlsx' or output==pdf:raise ValueError('输出应为新 XLSX')
  sourcehash=sha(pdf); manifestfile=directory/'pages.json';manhash=sha(manifestfile); manifest=json.loads(manifestfile.read_text(encoding='utf8'))
@@ -24,7 +28,7 @@ def run(pdf,pages_dir,output):
  w=Workbook();review=w.active;review.title='逐格复核';review.append(['PDF页码','行','列','识别原文','页内位置_像素','复核状态'])
  missing=w.create_sheet('未归属片段');missing.append(['PDF页码','识别原文','页内位置_像素','复核状态'])
  info=w.create_sheet('来源');info.append(['项目','内容']);append_text(info,['PDF文件名',pdf.name],[2]);info.append(['PDF SHA-256',sourcehash]);info.append(['页面清单 SHA-256',manhash]);info.append(['注意','所有格子包括空白和未归属片段均需对原 PDF 人工核对'])
- expected=[];miss_expected=[];proof=[]
+ expected=[];miss_expected=[];proof=[];preview_streams=[];preview_hashes=[]
  for i,p in enumerate(pages,1):
   name=f'page_{i:04d}.png'
   if p.get('page')!=i or p.get('image')!=name:raise ValueError('页面顺序或文件名无效')
@@ -46,9 +50,21 @@ def run(pdf,pages_dir,output):
    if not isinstance(text,str) or len(text)>32767 or not isinstance(box,list):raise ValueError('识别片段无效')
    coords=json.dumps(box,ensure_ascii=False);append_text(missing,[i,text,coords,'待人工核对原PDF'],[2]);miss_expected.append((i,text or None,coords,'待人工核对原PDF'))
   append_text(info,[f'第{i}页图片 SHA-256',imgsha],[]);append_text(info,[f'第{i}页 OCR JSON SHA-256',ocrsha],[]);append_text(info,[f'第{i}页网格 JSON SHA-256',gridsha],[])
+  if embed_previews:
+   preview=w.create_sheet(f'页{i:03d}_原页预览')
+   preview['A1']='缩略图仅用于定位；数字须对照原 PDF 原尺寸逐项核对。'
+   with PILImage.open(img) as source_image:
+    source_image.load();source_image.thumbnail((1400,1400))
+    stream=BytesIO();source_image.save(stream,format='PNG');stream.seek(0)
+   preview_hashes.append(hashlib.sha256(stream.getvalue()).hexdigest());preview_streams.append(stream)
+   preview.add_image(ExcelImage(stream),'A3')
   proof.extend([(img,imgsha),(ocr,ocrsha),(grid,gridsha)])
  with open(output,'xb') as f:w.save(f)
  if sha(pdf)!=sourcehash or sha(manifestfile)!=manhash or any(sha(f)!=h for f,h in proof):raise ValueError('输入处理期间发生变化')
+ if embed_previews:
+  with zipfile.ZipFile(output) as z:
+   stored=[hashlib.sha256(z.read(n)).hexdigest() for n in z.namelist() if n.startswith('xl/media/') and n.endswith('.png')]
+  if Counter(stored)!=Counter(preview_hashes):raise ValueError('原页预览图片回读不一致')
  check=load_workbook(output,read_only=True,data_only=False)
  try:
   if list(check['逐格复核'].values)[1:]!=expected or list(check['未归属片段'].values)[1:]!=miss_expected:raise ValueError('复核清单回读不一致')
@@ -58,4 +74,4 @@ def run(pdf,pages_dir,output):
  return count,len(expected),len(miss_expected)
 
 if __name__=='__main__':
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('pdf');p.add_argument('pages_dir');p.add_argument('output');a=p.parse_args();print('页面、单元格、未归属片段:',run(a.pdf,a.pages_dir,a.output))
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('pdf');p.add_argument('pages_dir');p.add_argument('output');p.add_argument('--embed-page-previews',action='store_true');a=p.parse_args();print('页面、单元格、未归属片段:',run(a.pdf,a.pages_dir,a.output,a.embed_page_previews))

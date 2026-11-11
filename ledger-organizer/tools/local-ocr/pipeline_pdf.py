@@ -3,7 +3,7 @@ import argparse,json,subprocess,sys
 from pathlib import Path
 
 
-def run(pdf,output_dir):
+def run(pdf,output_dir,embed_previews=False):
  pdf=Path(pdf).resolve();out=Path(output_dir).resolve();here=Path(__file__).resolve().parent
  # render_pdf creates the output directory exclusively; never remove a partial result.
  def step(label,args):
@@ -17,8 +17,10 @@ def run(pdf,output_dir):
   page=out/f'page_{i:04d}.png';ocr=out/f'page_{i:04d}_ocr.json';grid=out/f'page_{i:04d}_grid.json'
   step(f'第{i}页 OCR',['recognize_image.py',page,ocr])
   step(f'第{i}页网格定位',['table_grid.py',page,ocr,grid])
- review=out/'待人工复核.xlsx';step('复核表生成',['export_pdf_review.py',pdf,out,review]);return count,review
+ review=out/'待人工复核.xlsx';args=['export_pdf_review.py',pdf,out,review]
+ if embed_previews:args.append('--embed-page-previews')
+ step('复核表生成',args);return count,review
 
 if __name__=='__main__':
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('pdf');p.add_argument('output_dir');a=p.parse_args()
- count,path=run(a.pdf,a.output_dir);print('已处理页数:',count,'复核表:',path,'所有内容需人工核对原件')
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('pdf');p.add_argument('output_dir');p.add_argument('--embed-page-previews',action='store_true');a=p.parse_args()
+ count,path=run(a.pdf,a.output_dir,a.embed_page_previews);print('已处理页数:',count,'复核表:',path,'所有内容需人工核对原件')
