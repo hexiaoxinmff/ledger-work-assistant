@@ -31,3 +31,5 @@
 ## 本地图片 OCR 实验
 
 包内提供单张图片识别脚本 `ledger-organizer/tools/local-ocr/recognize_image.py`，使用预先安装的指定 RapidOCR/ONNX Runtime 和通过哈希检查的模型；项目不含模型、不自动安装下载。输出识别文本、位置及待人工复核状态，不自动填账或恢复表格。仅供虚构样例测试，完整限制见 `ledger-organizer/references/local-ocr.md`。
+
+实验功能可对单张简单线框表格图片尝试定位网格并导出复核工作簿；仅限虚构样例，依赖 OCR/OpenCV 和 openpyxl。所有识别内容及空格需对原图人工核对，多页 PDF 和复杂表格暂不保证支持。详见 `ledger-organizer/references/local-ocr.md`。
