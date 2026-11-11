@@ -1,5 +1,6 @@
 """Tests human-declared review, not human accuracy."""
 import hashlib,importlib.util,json,tempfile,unittest
+from unittest.mock import patch
 from pathlib import Path
 from PIL import Image
 from openpyxl import load_workbook
@@ -27,6 +28,36 @@ class HumanReview(unittest.TestCase):
    ws['H3']=123;wb.save(review);wb.close()
    with self.assertRaisesRegex(ValueError,'必须为非空文本'):collect.run(pdf,pages,review,out)
    wb=load_workbook(review);ws=wb['逐格复核'];ws['H3']='000123456789012345678';wb.save(review);wb.close()
+   def broken_save(workbook,stream):
+    stream.write(b'partial');raise OSError('simulated write failure')
+   with patch.object(collect.Workbook,'save',broken_save):
+    with self.assertRaisesRegex(OSError,'simulated write failure'):collect.run(pdf,pages,review,out)
+   self.assertFalse(out.exists());self.assertEqual(list(d.glob('.ledger-review-*.tmp')),[])
+   original_load=collect.load_workbook;loads=[]
+   def broken_verify(*args,**kwargs):
+    loads.append(1)
+    if len(loads)==2:raise ValueError('simulated readback failure')
+    return original_load(*args,**kwargs)
+   with patch.object(collect,'load_workbook',side_effect=broken_verify):
+    with self.assertRaisesRegex(ValueError,'simulated readback failure'):collect.run(pdf,pages,review,out)
+   self.assertFalse(out.exists());self.assertEqual(list(d.glob('.ledger-review-*.tmp')),[])
+   original_sha=collect.sha;pdf_checks=[]
+   def changed_input(path):
+    if Path(path).resolve()==pdf.resolve():
+     pdf_checks.append(1)
+     if len(pdf_checks)==2:return 'changed'
+    return original_sha(path)
+   with patch.object(collect,'sha',side_effect=changed_input):
+    with self.assertRaisesRegex(ValueError,'输入处理期间变化'):collect.run(pdf,pages,review,out)
+   self.assertFalse(out.exists());self.assertEqual(list(d.glob('.ledger-review-*.tmp')),[])
+   real_link=collect.os.link
+   def competing_output(source,destination):
+    Path(destination).write_bytes(b'other writer')
+    return real_link(source,destination)
+   with patch.object(collect.os,'link',side_effect=competing_output):
+    with self.assertRaises(FileExistsError):collect.run(pdf,pages,review,out)
+   self.assertEqual(out.read_bytes(),b'other writer');self.assertEqual(list(d.glob('.ledger-review-*.tmp')),[])
+   out.unlink()
    self.assertEqual(collect.run(pdf,pages,review,out),(4,1))
    result=load_workbook(out);self.assertEqual(result['复核记录']['F2'].value,'001');self.assertEqual(result['复核记录']['F3'].value,'000123456789012345678');self.assertEqual(result['复核记录']['F3'].data_type,'s');self.assertEqual(result['说明']['B5'].value,1);result.close()
    before=sha(out)

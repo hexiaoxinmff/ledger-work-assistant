@@ -1,5 +1,5 @@
 """Collect declared human review decisions; never certify financial correctness."""
-import argparse,hashlib,json
+import argparse,hashlib,json,os,tempfile
 from pathlib import Path
 from openpyxl import Workbook,load_workbook
 
@@ -70,12 +70,21 @@ def run(pdf,pages_dir,reviewed,output):
   for col in (4,6):
    if isinstance(detail.cell(detail.max_row,col).value,str):detail.cell(detail.max_row,col).data_type='s'
  info=output_w.create_sheet('说明');info.append(['项目','内容']);info.append(['来源PDF SHA-256',pdfhash]);info.append(['复核表 SHA-256',reviewhash]);info.append(['页面清单 SHA-256',manhash]);info.append(['无法辨认数量',unresolved]);info.append(['说明','人工选择由使用者声明，工具无法验证是否真的看过原件；不是财务核准'])
- with open(output,'xb') as f:output_w.save(f)
- if sha(pdf)!=pdfhash or sha(reviewed)!=reviewhash or sha(manifestfile)!=manhash or any(sha(x)!=h for x,h in proof):raise ValueError('输入处理期间变化')
- verify=load_workbook(output,read_only=True,data_only=False)
+ # The final name must never identify an incomplete or unverified workbook.
+ # Create the staging file in the destination directory, verify it, then publish
+ # using an exclusive hard link; unlike replace/rename, link cannot overwrite.
+ fd,tempname=tempfile.mkstemp(prefix='.ledger-review-',suffix='.tmp',dir=output.parent)
  try:
-  if list(verify['复核记录'].values)[1:]!=decisions:raise ValueError('复核记录回读不一致')
- finally:verify.close()
+  with os.fdopen(fd,'wb') as f:output_w.save(f)
+  with open(tempname,'rb') as staged:
+   verify=load_workbook(staged,read_only=True,data_only=False)
+   try:
+    if list(verify['复核记录'].values)[1:]!=decisions:raise ValueError('复核记录回读不一致')
+   finally:verify.close()
+  if sha(pdf)!=pdfhash or sha(reviewed)!=reviewhash or sha(manifestfile)!=manhash or any(sha(x)!=h for x,h in proof):raise ValueError('输入处理期间变化')
+  os.link(tempname,output)
+ finally:
+  os.unlink(tempname)
  return len(decisions),unresolved
 
 if __name__=='__main__':
