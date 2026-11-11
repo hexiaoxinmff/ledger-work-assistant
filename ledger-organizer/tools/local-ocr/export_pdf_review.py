@@ -6,6 +6,7 @@ from PIL import Image as PILImage
 from openpyxl.drawing.image import Image as ExcelImage
 from pathlib import Path
 from openpyxl import Workbook,load_workbook
+from openpyxl.worksheet.datavalidation import DataValidation
 
 def sha(p):
  h=hashlib.sha256()
@@ -25,9 +26,9 @@ def run(pdf,pages_dir,output,embed_previews=False):
  if manifest.get('source_sha256')!=sourcehash:raise ValueError('PDF 来源哈希不一致')
  count=manifest.get('page_count');pages=manifest.get('pages')
  if not isinstance(count,int) or not 1<=count<=20 or not isinstance(pages,list) or len(pages)!=count:raise ValueError('页数无效')
- w=Workbook();review=w.active;review.title='逐格复核';review.append(['PDF页码','行','列','识别原文','页内位置_像素','复核状态'])
+ w=Workbook();review=w.active;review.title='逐格复核';review.append(['PDF页码','行','列','识别原文','页内位置_像素','复核状态','人工复核选择','人工修正原文'])
  missing=w.create_sheet('未归属片段');missing.append(['PDF页码','识别原文','页内位置_像素','复核状态'])
- info=w.create_sheet('来源');info.append(['项目','内容']);append_text(info,['PDF文件名',pdf.name],[2]);info.append(['PDF SHA-256',sourcehash]);info.append(['页面清单 SHA-256',manhash]);info.append(['注意','所有格子包括空白和未归属片段均需对原 PDF 人工核对'])
+ info=w.create_sheet('来源');info.append(['项目','内容']);append_text(info,['PDF文件名',pdf.name],[2]);info.append(['PDF SHA-256',sourcehash]);info.append(['页面清单 SHA-256',manhash]);info.append(['注意','所有格子包括空白和未归属片段均需对原 PDF 人工核对']);info.append(['复核操作','逐格复核表 G 列选择原文一致、人工修正、原文为空或无法辨认；仅人工修正时在 H 列输入文本。未归属片段需单独处理。']);info.append(['长编号','修正原文列按文本保存；如软件仍自动转成数值，请先设置文本再输入，不能恢复已经丢失的前导零。'])
  expected=[];miss_expected=[];proof=[];preview_streams=[];preview_hashes=[]
  for i,p in enumerate(pages,1):
   name=f'page_{i:04d}.png'
@@ -44,7 +45,7 @@ def run(pdf,pages_dir,output,embed_previews=False):
    r,k,text,box=c.get('行'),c.get('列'),c.get('识别文本'),c.get('边界_像素')
    if not isinstance(r,int) or not isinstance(k,int) or not 1<=r<=rows or not 1<=k<=cols or (r,k) in seen or not isinstance(text,str) or len(text)>32767 or not isinstance(box,list) or len(box)!=4:raise ValueError('单元格无效')
    seen.add((r,k));cell=ws.cell(r,k);cell.value=text;cell.data_type='s'
-   coords=json.dumps(box,ensure_ascii=False);append_text(review,[i,r,k,text,coords,'待人工核对原PDF'],[4]);expected.append((i,r,k,text or None,coords,'待人工核对原PDF'))
+   coords=json.dumps(box,ensure_ascii=False);append_text(review,[i,r,k,text,coords,'待人工核对原PDF','待核对',None],[4]);review.cell(review.max_row,8).number_format='@';expected.append((i,r,k,text or None,coords,'待人工核对原PDF','待核对',None))
   for part in unassigned:
    text,box=part.get('识别文本'),part.get('位置_像素')
    if not isinstance(text,str) or len(text)>32767 or not isinstance(box,list):raise ValueError('识别片段无效')
@@ -59,6 +60,10 @@ def run(pdf,pages_dir,output,embed_previews=False):
    preview_hashes.append(hashlib.sha256(stream.getvalue()).hexdigest());preview_streams.append(stream)
    preview.add_image(ExcelImage(stream),'A3')
   proof.extend([(img,imgsha),(ocr,ocrsha),(grid,gridsha)])
+ review.freeze_panes='D2';review.column_dimensions['D'].width=25;review.column_dimensions['G'].width=18;review.column_dimensions['H'].width=28
+ validation=DataValidation(type='list',formula1='"待核对,原文一致,人工修正,原文为空,无法辨认"',allow_blank=False)
+ validation.error='请选择列表中的复核状态';validation.errorTitle='复核状态无效';validation.showErrorMessage=True
+ review.add_data_validation(validation);validation.add(f'G2:G{len(expected)+1}')
  with open(output,'xb') as f:w.save(f)
  if sha(pdf)!=sourcehash or sha(manifestfile)!=manhash or any(sha(f)!=h for f,h in proof):raise ValueError('输入处理期间发生变化')
  if embed_previews:
@@ -68,7 +73,7 @@ def run(pdf,pages_dir,output,embed_previews=False):
  check=load_workbook(output,read_only=True,data_only=False)
  try:
   if list(check['逐格复核'].values)[1:]!=expected or list(check['未归属片段'].values)[1:]!=miss_expected:raise ValueError('复核清单回读不一致')
-  for page,row,col,text,_,_ in expected:
+  for page,row,col,text,_,_,_,_ in expected:
    if check[f'页{page:03d}_待核对'].cell(row,col).value!=text:raise ValueError('输出表格回读不一致')
  finally:check.close()
  return count,len(expected),len(miss_expected)
