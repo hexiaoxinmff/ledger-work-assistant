@@ -27,3 +27,7 @@
 包内另提供受限的 CSV/XLSX 本地互转脚本 `ledger-organizer/tools/format-conversion/convert_table.py`，保留可读取的值并进行回读检查；格式及公式等限制见转换说明。其他格式仍依赖当前环境工具。
 
 简单 DOCX 表格转换会生成结构化表、来源明细及含数字原文复核清单；其数字筛选不代表已核对。运行 `python ledger-organizer/tools/check_environment.py` 可只读检查当前 Python 中的模块和工具文件是否可发现。
+
+## 本地图片 OCR 实验
+
+包内提供单张图片识别脚本 `ledger-organizer/tools/local-ocr/recognize_image.py`，使用预先安装的指定 RapidOCR/ONNX Runtime 和通过哈希检查的模型；项目不含模型、不自动安装下载。输出识别文本、位置及待人工复核状态，不自动填账或恢复表格。仅供虚构样例测试，完整限制见 `ledger-organizer/references/local-ocr.md`。
