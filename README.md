@@ -25,3 +25,5 @@
 技能根据任务和当前平台能力选择文档、PDF、表格及图片转换工具；不同平台的支持情况需实测。格式转换后的数字、文件结构与页面呈现需要按任务核验，详见 `ledger-organizer/references/format-conversion.md`。本技能不自带所有格式的转换器或 OCR。
 
 包内另提供受限的 CSV/XLSX 本地互转脚本 `ledger-organizer/tools/format-conversion/convert_table.py`，保留可读取的值并进行回读检查；格式及公式等限制见转换说明。其他格式仍依赖当前环境工具。
+
+简单 DOCX 表格转换会生成结构化表、来源明细及含数字原文复核清单；其数字筛选不代表已核对。运行 `python ledger-organizer/tools/check_environment.py` 可只读检查当前 Python 中的模块和工具文件是否可发现。

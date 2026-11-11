@@ -41,13 +41,32 @@ def run(source, output):
         ws.append(row)
         for cell in ws[ws.max_row]:
             if isinstance(cell.value, str): cell.data_type = "s"
+    # Reconstruct table cell grid as text; original styling is not reproduced.
+    for table_id in sorted({r[0] for r in rows}):
+        grid = wb.create_sheet("表格" + str(table_id))
+        for ti, ri, ci, value in rows:
+            if ti == table_id:
+                cell = grid.cell(row=ri, column=ci, value=value)
+                if isinstance(value, str): cell.data_type = "s"
+    audit = wb.create_sheet("数字复核")
+    audit.append(["文档表序号", "表内行", "表内列", "含数字原文", "复核状态"])
+    for ti, ri, ci, value in rows:
+        if any(ch.isdigit() for ch in value):
+            audit.append([ti, ri, ci, value, "待人工复核"])
+            audit.cell(audit.max_row, 4).data_type = "s"
     with open(output, "xb") as f: wb.save(f)
     if sha(source) != before: raise ValueError("输入处理期间发生变化，结果不可交付")
     check = load_workbook(output, read_only=True, data_only=False)
     try:
         actual = list(check.active.values)[1:]
         expected = [(a,b,c,d if d else None) for a,b,c,d in rows]
-        if actual != expected: raise ValueError("输出回读与读取原文不一致")
+        if actual != expected: raise ValueError("输出明细与读取原文不一致")
+        for ti, ri, ci, value in rows:
+            actual_value = check["表格" + str(ti)].cell(row=ri, column=ci).value
+            if actual_value != (value if value else None): raise ValueError("结构表回读不一致")
+        audit_actual = list(check["数字复核"].values)[1:]
+        audit_expected = [(ti,ri,ci,value,"待人工复核") for ti,ri,ci,value in rows if any(ch.isdigit() for ch in value)]
+        if audit_actual != audit_expected: raise ValueError("数字复核清单回读不一致")
     finally: check.close()
     return len(rows)
 
