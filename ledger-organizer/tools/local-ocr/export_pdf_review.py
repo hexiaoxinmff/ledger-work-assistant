@@ -1,5 +1,5 @@
 """Collect page-specific OCR grid JSON into a traceable review workbook."""
-import argparse,hashlib,json,zipfile
+import argparse,hashlib,json,zipfile,os,tempfile
 from collections import Counter
 from io import BytesIO
 from PIL import Image as PILImage
@@ -64,18 +64,24 @@ def run(pdf,pages_dir,output,embed_previews=False):
  validation=DataValidation(type='list',formula1='"待核对,原文一致,人工修正,原文为空,无法辨认"',allow_blank=False)
  validation.error='请选择列表中的复核状态';validation.errorTitle='复核状态无效';validation.showErrorMessage=True
  review.add_data_validation(validation);validation.add(f'G2:G{len(expected)+1}')
- with open(output,'xb') as f:w.save(f)
- if sha(pdf)!=sourcehash or sha(manifestfile)!=manhash or any(sha(f)!=h for f,h in proof):raise ValueError('输入处理期间发生变化')
- if embed_previews:
-  with zipfile.ZipFile(output) as z:
-   stored=[hashlib.sha256(z.read(n)).hexdigest() for n in z.namelist() if n.startswith('xl/media/') and n.endswith('.png')]
-  if Counter(stored)!=Counter(preview_hashes):raise ValueError('原页预览图片回读不一致')
- check=load_workbook(output,read_only=True,data_only=False)
+ # Stage next to the output and verify before publishing an exclusive final name.
+ fd,tempname=tempfile.mkstemp(prefix='.ledger-pdf-review-',suffix='.tmp',dir=output.parent)
  try:
-  if list(check['逐格复核'].values)[1:]!=expected or list(check['未归属片段'].values)[1:]!=miss_expected:raise ValueError('复核清单回读不一致')
-  for page,row,col,text,_,_,_,_ in expected:
-   if check[f'页{page:03d}_待核对'].cell(row,col).value!=text:raise ValueError('输出表格回读不一致')
- finally:check.close()
+  with os.fdopen(fd,'wb') as f:w.save(f)
+  if embed_previews:
+   with zipfile.ZipFile(tempname) as z:
+    stored=[hashlib.sha256(z.read(n)).hexdigest() for n in z.namelist() if n.startswith('xl/media/') and n.endswith('.png')]
+   if Counter(stored)!=Counter(preview_hashes):raise ValueError('原页预览图片回读不一致')
+  with open(tempname,'rb') as staged:
+   check=load_workbook(staged,read_only=True,data_only=False)
+   try:
+    if list(check['逐格复核'].values)[1:]!=expected or list(check['未归属片段'].values)[1:]!=miss_expected:raise ValueError('复核清单回读不一致')
+    for page,row,col,text,_,_,_,_ in expected:
+     if check[f'页{page:03d}_待核对'].cell(row,col).value!=text:raise ValueError('输出表格回读不一致')
+   finally:check.close()
+  if sha(pdf)!=sourcehash or sha(manifestfile)!=manhash or any(sha(f)!=h for f,h in proof):raise ValueError('输入处理期间发生变化')
+  os.link(tempname,output)
+ finally:os.unlink(tempname)
  return count,len(expected),len(miss_expected)
 
 if __name__=='__main__':
