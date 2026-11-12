@@ -1,0 +1,35 @@
+"""Run bundled synthetic regression suites with the selected Python interpreter."""
+import argparse
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+ROOT=Path(__file__).resolve().parents[1]
+CORE=('tools/tests','tools/format-conversion/tests','tools/document-to-excel/tests')
+OCR=('tools/local-ocr/tests',)
+
+def run_suite(directory,timeout):
+    path=ROOT/directory
+    if not path.is_dir() or not list(path.glob('test_*.py')):
+        return {'suite':directory,'status':'missing_tests'}
+    command=[sys.executable,'-m','unittest','discover','-s',str(path),'-v']
+    try:
+        result=subprocess.run(command,cwd=ROOT,capture_output=True,text=True,encoding='utf8',errors='replace',timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return {'suite':directory,'status':'timeout','timeout_seconds':timeout}
+    return {'suite':directory,'status':'passed' if result.returncode==0 else 'failed','exit_code':result.returncode,'output':(result.stdout+result.stderr)[-16000:]}
+
+def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--suite',choices=('core','ocr','all'),default='core')
+    parser.add_argument('--timeout',type=int,default=180,help='每个测试组的超时秒数')
+    args=parser.parse_args()
+    if not 1<=args.timeout<=600:parser.error('--timeout 必须在 1 至 600 秒之间')
+    selected=CORE if args.suite=='core' else OCR if args.suite=='ocr' else CORE+OCR
+    results=[run_suite(directory,args.timeout) for directory in selected]
+    passed=all(result['status']=='passed' for result in results)
+    print(json.dumps({'executable':sys.executable,'selected':args.suite,'results':results,'selected_suites_passed':passed,'not_run':list(OCR if args.suite=='core' else CORE if args.suite=='ocr' else ()),'scope':'仅包内虚构脚本回归；不验证真实业务、平台自主调用、界面或 OCR 模型识别精度；不安装依赖'},ensure_ascii=False,indent=2))
+    return 0 if passed else 1
+
+if __name__=='__main__':sys.exit(main())
