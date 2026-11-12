@@ -4,6 +4,24 @@
 
 ## 安装和使用
 
+当前技能版本：v0.34。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
+
+在仓库根目录运行以下命令检查本次要用的解释器，不自动安装依赖：
+
+```text
+python ledger-organizer/tools/check_environment.py --task table_conversion
+```
+
+报告包含实际解释器与工具入口。后续命令中的 `python` 应使用同一个解释器；检查失败须如实记录，不能当成转换已通过。其他任务可用 `--help` 查看；OCR 还需指定版本、模型和实际识别验证。
+
+使用纯虚构、明确三列的包内样例试转，结果路径必须尚不存在：
+
+```text
+python ledger-organizer/tools/format-conversion/convert_table.py ledger-organizer/tools/tests/fixtures/acceptance.csv acceptance-result.xlsx --expected-columns 3
+```
+
+这是转换命令示例，不会安装技能或证明平台已自动调用。转换后仍应重新读取结果并逐项核对。首次试用先完成样例验收，再评估本人任务所需规则和未覆盖限制。
+
 下载本仓库后，将 `ledger-organizer` 文件夹按所用 Agent 平台的技能安装方式导入，或让支持读取文件的 Agent 阅读 `ledger-organizer/SKILL.md`。具体目录、自动加载、联网和文件访问能力因平台而异，需在目标环境测试。可先用虚构样例提供两张表、确认字段和规则，再要求保留来源、生成复核清单。
 
 技能内含有限测试的 Python 对账适配副本；运行需要 Python、pandas、openpyxl、PyYAML，实际依赖和平台权限须另行检查。其结果可选表格或附加结果项柱状图；结果项数量不等于交易笔数。脚本当前仅用虚构数据测试，不用于真实账目。
@@ -24,9 +42,9 @@
 
 技能根据任务和当前平台能力选择文档、PDF、表格及图片转换工具；不同平台的支持情况需实测。格式转换后的数字、文件结构与页面呈现需要按任务核验，详见 `ledger-organizer/references/format-conversion.md`。本技能不自带所有格式的转换器或 OCR。
 
-包内另提供受限的 CSV/XLSX 本地互转脚本 `ledger-organizer/tools/format-conversion/convert_table.py`，保留可读取的值并进行回读检查；格式及公式等限制见转换说明。其他格式仍依赖当前环境工具。
+包内提供受限的 CSV/TSV 与 XLSX 本地互转脚本 `ledger-organizer/tools/format-conversion/convert_table.py`。TSV 固定制表符，CSV 默认逗号，可明确指定 `--delimiter semicolon` 或 `--delimiter tab`；已确认列数时使用 `--expected-columns`。显示格式可能影响数字含义时默认停止，只有明确接受底层值导出后才使用 `--allow-display-loss`。源内容按文本保存及回读核验，文本导出不保留类型，直接在表格软件打开仍可能改变长编号。更多限制见转换说明。
 
-简单 DOCX 表格转换会生成结构化表、来源明细及含数字原文复核清单；其数字筛选不代表已核对。运行 `python ledger-organizer/tools/check_environment.py` 可只读检查当前 Python 中的模块和工具文件是否可发现。
+简单 DOCX 表格转换生成结构化表、来源明细及含数字原文复核清单，筛选不代表已核对。特殊符号、域标记、脚注/尾注引用、内容控件等不支持结构会停止，需另选方式并人工确认；该检查不能穷尽所有 Word 结构。环境自检不带参数时仅检查模块和文件能否发现，带 `--task` 才实际探测相应依赖导入。
 
 ## 本地图片 OCR 实验
 
@@ -35,6 +53,10 @@
 实验功能可对单张简单线框表格图片尝试定位网格并导出复核工作簿；仅限虚构样例，依赖 OCR/OpenCV 和 openpyxl。所有识别内容及空格需对原图人工核对，多页 PDF 和复杂表格暂不保证支持。详见 `ledger-organizer/references/local-ocr.md`。
 
 实验功能还可尝试 1–20 页、每页一个简单线框表的虚构 PDF，输出带页码的复核工作簿和中间页面文件；任何页面失败会停止，所有格子必须人工核对。依赖、隐私和适用范围见 `ledger-organizer/references/local-ocr.md`。
+
+PDF 一键流程在渲染前自动检查 OCR 版本和模型哈希；也可单独运行 `python ledger-organizer/tools/local-ocr/recognize_image.py --check-runtime`，此检查无需图片，不运行识别，不证明引擎初始化或准确率。依赖不随仓库下载，代码存在也不等于 OCR 环境已准备。
+
+CSV/TSV 转换、PDF 复核表及复核汇总采用临时文件校验后不覆盖发布，目标目录需要硬链接支持。强制中断可能遗留含原文的临时文件，按资料授权处理；其他输出工具不自动具有相同保护。
 
 多页 PDF 复核默认不嵌入原页；如用户明确需要，可选择嵌入原页缩略图辅助定位。缩略图包含完整页面，可能包含表格以外的内容，分享前需按资料授权处理；数字仍以原 PDF 原尺寸人工复核。
 
