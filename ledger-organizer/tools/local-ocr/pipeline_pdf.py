@@ -10,7 +10,8 @@ def run(pdf,output_dir,embed_previews=False):
   try:
    result=subprocess.run([sys.executable,str(here/args[0]),*[str(x) for x in args[1:]]],capture_output=True,text=True,encoding='utf8',errors='replace',timeout=120)
   except subprocess.TimeoutExpired as e:raise RuntimeError(label+' 超时；中间文件保留，需检查并换新目录') from e
-  if result.returncode:raise RuntimeError(label+' 失败，未生成完整交付；中间文件保留。'+result.stderr[-1500:])
+  if result.returncode:raise RuntimeError(label+' 失败，未生成完整交付；如有中间文件则保留。'+result.stderr[-1500:])
+ step('OCR版本与模型预检',['recognize_image.py','--check-runtime'])
  step('PDF逐页渲染',['render_pdf.py',pdf,out])
  manifest=json.loads((out/'pages.json').read_text(encoding='utf8'));count=manifest['page_count']
  for i in range(1,count+1):
