@@ -14,11 +14,7 @@ def sha(path):
         for b in iter(lambda:f.read(1048576),b''):h.update(b)
     return h.hexdigest()
 
-def run(source, output):
-    source=Path(source).resolve(); output=Path(output).resolve()
-    if source==output:raise ValueError('输出不能覆盖源文件')
-    if output.suffix.lower() != '.json':raise ValueError('输出必须是 JSON 文件')
-    if source.suffix.lower() not in ('.png','.jpg','.jpeg'):raise ValueError('仅支持本地 PNG/JPEG 图片，不支持 PDF')
+def check_runtime():
     if metadata.version('rapidocr')!='3.10.0' or metadata.version('onnxruntime')!='1.20.1':raise ValueError('当前试用版仅测试 rapidocr 3.10.0 与 onnxruntime 1.20.1')
     spec=importlib.util.find_spec('rapidocr')
     if spec is None or spec.origin is None:raise ValueError('未发现 rapidocr')
@@ -26,6 +22,14 @@ def run(source, output):
     for filename,expected in EXPECTED_MODELS.items():
         model=model_dir/filename
         if not model.is_file() or sha(model)!=expected:raise ValueError('本地模型缺失或哈希不符：'+filename)
+    return {'versions':{'rapidocr':'3.10.0','onnxruntime':'1.20.1'},'models_verified':list(EXPECTED_MODELS),'note':'仅校验版本与模型文件哈希；未初始化引擎或验证识别效果'}
+
+def run(source, output):
+    source=Path(source).resolve(); output=Path(output).resolve()
+    if source==output:raise ValueError('输出不能覆盖源文件')
+    if output.suffix.lower() != '.json':raise ValueError('输出必须是 JSON 文件')
+    if source.suffix.lower() not in ('.png','.jpg','.jpeg'):raise ValueError('仅支持本地 PNG/JPEG 图片，不支持 PDF')
+    check_runtime()
     before=sha(source)
     # Block Python socket connections inside this short-lived process. This is not OS isolation.
     def deny(*args,**kwargs):raise OSError('OCR test: network access disabled')
@@ -47,5 +51,10 @@ def run(source, output):
     return len(records)
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('source');p.add_argument('output');a=p.parse_args()
-    print('识别行数（均需人工复核）:',run(a.source,a.output))
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('source',nargs='?');p.add_argument('output',nargs='?');p.add_argument('--check-runtime',action='store_true');a=p.parse_args()
+    if a.check_runtime:
+        if a.source or a.output:p.error('--check-runtime 不接收输入或输出文件')
+        print(json.dumps(check_runtime(),ensure_ascii=False))
+    else:
+        if not a.source or not a.output:p.error('识别需要 source 和 output')
+        print('识别行数（均需人工复核）:',run(a.source,a.output))

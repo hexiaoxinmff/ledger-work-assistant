@@ -1,5 +1,7 @@
 # 本地 OCR 试验边界 v0.20
 
+v0.30 准备检查：用拟运行 OCR 的同一解释器执行 `python tools/local-ocr/recognize_image.py --check-runtime`，检查固定版本及三份模型哈希。无需图片或输出路径，不加载识别引擎，不下载模型；版本不符、缺模型或哈希不一致即停止。依赖导入自检另用 `tools/check_environment.py --task local_ocr` 或 `--task pdf_pipeline`；两类检查都通过仍需实际虚构识别与人工复核，不能据此报告数字准确。
+
 该入口使用 RapidOCR 和 ONNX Runtime，本仓库不包含运行时或模型，先在独立环境自行按 `tools/local-ocr/requirements.txt` 准备依赖；工具不负责安装、下载或修改系统。来源：https://github.com/RapidAI/RapidOCR ，代码及模型按上游说明使用 Apache-2.0；实际依赖及模型的许可应分别核对。运行前逐项检查内置默认模型的名称和 SHA-256，不符合即停止。运行时在 Python 进程中阻断 socket 连接，仅为进程级措施，不能证明操作系统隔离或平台不接收数据。
 
 本工具只读取单张本地 PNG/JPEG，生成含文本、检测框、分数、源文件名和 SHA-256 的 JSON；每条均标待人工核对。检测框不是表格单元格，不自动识别表格结构、分配金额或输出财务结论。模型分数不保证金额正确，空白结果也不代表原图一定空白。扫描 PDF、多页、合并单元格和其他文件须用其他已确认能力。
