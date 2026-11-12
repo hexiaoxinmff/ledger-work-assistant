@@ -10,7 +10,8 @@ def sha(path):
     return h.hexdigest()
 
 
-def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,delimiter=None):
+def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,delimiter=None,expected_columns=None):
+    if expected_columns is not None and (type(expected_columns) is not int or not 1<=expected_columns<=16384):raise ValueError('预期列数必须为 1 至 16384 的整数')
     if os.path.realpath(source)==os.path.realpath(output):raise ValueError('输出不可覆盖输入')
     before=sha(source); src=os.path.splitext(source)[1].lower(); dst=os.path.splitext(output)[1].lower()
     text_format=src if src in ('.csv','.tsv') else dst
@@ -51,6 +52,8 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
                 rows.append(line)
         finally:w.close()
     else:raise ValueError('仅支持 CSV/TSV 与 XLSX 互转')
+    if expected_columns is not None and any(len(row)!=expected_columns for row in rows):
+        raise ValueError(f'实际列数不符合预期 {expected_columns} 列，请核对分隔符、工作表及表头')
     # Stage beside the destination, verify, then publish without overwriting.
     # The temporary file may contain the same sensitive values as the source.
     parent=os.path.dirname(os.path.abspath(output))
@@ -75,7 +78,7 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('source');p.add_argument('output');p.add_argument('--encoding',default='utf-8-sig');p.add_argument('--sheet');p.add_argument('--delimiter',choices=('comma','semicolon','tab'));p.add_argument('--allow-display-loss',action='store_true',help='已确认接受 XLSX 数字/日期按底层值导出，不保留显示格式');a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('source');p.add_argument('output');p.add_argument('--encoding',default='utf-8-sig');p.add_argument('--sheet');p.add_argument('--delimiter',choices=('comma','semicolon','tab'));p.add_argument('--expected-columns',type=int,help='按已确认的表结构核对列数');p.add_argument('--allow-display-loss',action='store_true',help='已确认接受 XLSX 数字/日期按底层值导出，不保留显示格式');a=p.parse_args()
     delimiter={'comma':',','semicolon':';','tab':'\t'}.get(a.delimiter)
-    print('转换完成，行数:',run(a.source,a.output,a.encoding,a.sheet,a.allow_display_loss,delimiter))
+    print('转换完成，行数:',run(a.source,a.output,a.encoding,a.sheet,a.allow_display_loss,delimiter,a.expected_columns))
     if a.output.lower().endswith(('.csv','.tsv')):print('注意：CSV/TSV 不保存单元格类型或格式；用表格软件打开时请将编号等字段按文本导入，并对照原表复核。')

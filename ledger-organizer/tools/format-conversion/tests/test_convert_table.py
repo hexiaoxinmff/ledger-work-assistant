@@ -9,6 +9,19 @@ spec=importlib.util.spec_from_file_location('convert_table',HERE/'convert_table.
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 
 class ConvertTable(unittest.TestCase):
+ def test_expected_columns_catches_wrong_separator(self):
+  with tempfile.TemporaryDirectory() as temporary:
+   directory=Path(temporary);source=directory/'input.csv';output=directory/'output.xlsx'
+   with source.open('w',encoding='utf-8',newline='') as stream:csv.writer(stream,delimiter=';').writerows([['ID','amount','note'],['00042','12.30','ok']])
+   with self.assertRaisesRegex(ValueError,'实际列数不符合预期 3'):module.run(str(source),str(output),expected_columns=3)
+   self.assertFalse(output.exists());self.assertEqual(list(directory.glob('.ledger-conversion-*')),[])
+   command=[sys.executable,str(HERE/'convert_table.py'),str(source),str(output),'--delimiter','semicolon','--expected-columns','3']
+   result=subprocess.run(command,capture_output=True,text=True,encoding='utf8',timeout=30)
+   self.assertEqual(result.returncode,0,result.stderr)
+   with self.assertRaisesRegex(ValueError,'实际列数不符合预期 2'):module.run(str(output),str(directory/'bad.tsv'),expected_columns=2)
+   self.assertFalse((directory/'bad.tsv').exists())
+   for invalid in (0,-1,16385,True,'3'):
+    with self.assertRaisesRegex(ValueError,'预期列数必须'):module.run(str(source),str(directory/'invalid.xlsx'),expected_columns=invalid)
  def test_tsv_and_semicolon_roundtrip(self):
   rows=[['ID','amount','note'],['001234567890123456789','12.30','inside\ttab;comma,quote"\nnext'],['00042','','pending']]
   for suffix,separator,option in (('.tsv','\t',None),('.csv',';',';')):
