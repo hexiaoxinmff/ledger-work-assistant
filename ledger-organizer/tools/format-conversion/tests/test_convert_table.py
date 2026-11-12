@@ -9,6 +9,21 @@ spec=importlib.util.spec_from_file_location('convert_table',HERE/'convert_table.
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 
 class ConvertTable(unittest.TestCase):
+ def test_tsv_and_semicolon_roundtrip(self):
+  rows=[['ID','amount','note'],['001234567890123456789','12.30','inside\ttab;comma,quote"\nnext'],['00042','','pending']]
+  for suffix,separator,option in (('.tsv','\t',None),('.csv',';',';')):
+   with self.subTest(suffix=suffix),tempfile.TemporaryDirectory() as temporary:
+    directory=Path(temporary);source=directory/('input'+suffix);xlsx=directory/'output.xlsx';restored=directory/('restored'+suffix)
+    with source.open('w',encoding='utf-8-sig',newline='') as stream:csv.writer(stream,delimiter=separator).writerows(rows)
+    before=module.sha(source)
+    module.run(str(source),str(xlsx),delimiter=option)
+    module.run(str(xlsx),str(restored),delimiter=option)
+    with restored.open(encoding='utf-8-sig',newline='') as stream:self.assertEqual(list(csv.reader(stream,delimiter=separator)),rows)
+    self.assertEqual(module.sha(source),before)
+    with self.assertRaises(FileExistsError):module.run(str(source),str(xlsx),delimiter=option)
+    if suffix=='.tsv':
+     with self.assertRaisesRegex(ValueError,'TSV 必须'):module.run(str(source),str(directory/'bad.xlsx'),delimiter=';')
+     self.assertFalse((directory/'bad.xlsx').exists())
  def test_formatted_numbers_require_explicit_choice(self):
   cases=[(123,'00000'),(0.15,'0%'),(12.3,'0.00'),(datetime.datetime(2026,1,2),'yyyy-mm-dd')]
   for value,fmt in cases:

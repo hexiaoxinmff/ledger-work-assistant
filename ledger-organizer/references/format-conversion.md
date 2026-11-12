@@ -1,5 +1,10 @@
 # 文件格式转换：能力选择与核验
 
+## v0.33 TSV 与明确分隔符
+包内 `tools/format-conversion/convert_table.py` 支持 TSV→XLSX 与 XLSX→TSV，TSV 固定制表符。CSV 默认逗号；如原件或使用者明确指定分号、制表符，可使用 `--delimiter semicolon` 或 `--delimiter tab`。选错分隔符可能得到一列且仍能完成回读，因此必须先核对预期表头、列数和样例，不将回读一致当作语义正确。保留编码选择，文本输出仍固定 UTF-8 BOM。
+
+例如 `python tools/format-conversion/convert_table.py input.tsv output.xlsx`，或 `python tools/format-conversion/convert_table.py input.csv output.xlsx --delimiter semicolon`。原有显示格式、公式样文本、列数与覆盖保护继续适用；TSV 同样不保存列类型，直接用表格软件打开仍可能改变长编号。虚构样例覆盖长编号、空值、内含制表符/分号/逗号/双引号/换行的字段及往返回读；不代表所有外部系统 TSV 方言都兼容。
+
 此文件定义工作流程，不代表本技能自带所有转换器。遵循用户指定的源文件、目标格式、范围、模板和平台权限；保持原件，另存新文件，避免覆盖。先检查文件能否读、类型与扩展名是否匹配、文件数量及页数/工作表、加密和损坏状态；信息已明确不重复询问。
 
 ## 根据任务选择

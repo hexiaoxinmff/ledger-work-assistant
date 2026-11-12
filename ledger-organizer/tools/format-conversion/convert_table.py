@@ -10,12 +10,16 @@ def sha(path):
     return h.hexdigest()
 
 
-def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False):
+def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,delimiter=None):
     if os.path.realpath(source)==os.path.realpath(output):raise ValueError('输出不可覆盖输入')
     before=sha(source); src=os.path.splitext(source)[1].lower(); dst=os.path.splitext(output)[1].lower()
-    if (src,dst)==('.csv','.xlsx'):
+    text_format=src if src in ('.csv','.tsv') else dst
+    if delimiter not in (None,',',';','\t'):raise ValueError('分隔符只支持逗号、分号或制表符')
+    if text_format=='.tsv' and delimiter not in (None,'\t'):raise ValueError('TSV 必须使用制表符')
+    separator=delimiter if delimiter is not None else ('\t' if text_format=='.tsv' else ',')
+    if src in ('.csv','.tsv') and dst=='.xlsx':
         if encoding not in ('utf-8','utf-8-sig','utf-16','gb18030','gbk'):raise ValueError('不支持该编码，请确认实际编码')
-        with open(source,encoding=encoding,newline='') as f:rows=list(csv.reader(f,strict=True))
+        with open(source,encoding=encoding,newline='') as f:rows=list(csv.reader(f,strict=True,delimiter=separator))
         if not rows:raise ValueError('CSV 为空')
         if any(len(r)!=len(rows[0]) for r in rows) or not rows[0]:raise ValueError('CSV 列数不一致或存在空行')
         if len(rows)>1048576 or len(rows[0])>16384 or any(len(v)>32767 for r in rows for v in r):raise ValueError('内容超过 Excel 容量')
@@ -24,7 +28,7 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False):
             ws.append(row)
             for c in ws[ws.max_row]:
                 if isinstance(c.value,str):c.data_type='s'
-    elif (src,dst)==('.xlsx','.csv'):
+    elif src=='.xlsx' and dst in ('.csv','.tsv'):
         w=load_workbook(source,read_only=False,data_only=False)
         try:
             if sheet is None and len(w.sheetnames)!=1:raise ValueError('多个工作表，请指定 --sheet')
@@ -46,7 +50,7 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False):
                     line.append(v)
                 rows.append(line)
         finally:w.close()
-    else:raise ValueError('仅支持 CSV → XLSX 或 XLSX → CSV')
+    else:raise ValueError('仅支持 CSV/TSV 与 XLSX 互转')
     # Stage beside the destination, verify, then publish without overwriting.
     # The temporary file may contain the same sensitive values as the source.
     parent=os.path.dirname(os.path.abspath(output))
@@ -61,9 +65,9 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False):
                     if actual!=rows:raise ValueError('转换后回读不一致')
                 finally:check.close()
         else:
-            with os.fdopen(fd,'w',encoding='utf-8-sig',newline='') as f:csv.writer(f).writerows(rows)
+            with os.fdopen(fd,'w',encoding='utf-8-sig',newline='') as f:csv.writer(f,delimiter=separator).writerows(rows)
             with open(tempname,encoding='utf-8-sig',newline='') as f:
-                if list(csv.reader(f,strict=True))!=rows:raise ValueError('转换后回读不一致')
+                if list(csv.reader(f,strict=True,delimiter=separator))!=rows:raise ValueError('转换后回读不一致')
         if sha(source)!=before:raise ValueError('源文件发生变化，结果不可交付')
         os.link(tempname,output)
     finally:os.unlink(tempname)
@@ -71,6 +75,7 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('source');p.add_argument('output');p.add_argument('--encoding',default='utf-8-sig');p.add_argument('--sheet');p.add_argument('--allow-display-loss',action='store_true',help='已确认接受 XLSX 数字/日期按底层值导出，不保留显示格式');a=p.parse_args()
-    print('转换完成，行数:',run(a.source,a.output,a.encoding,a.sheet,a.allow_display_loss))
-    if a.output.lower().endswith('.csv'):print('注意：CSV 不保存单元格类型或格式；用表格软件打开时请将编号等字段按文本导入，并对照原表复核。')
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('source');p.add_argument('output');p.add_argument('--encoding',default='utf-8-sig');p.add_argument('--sheet');p.add_argument('--delimiter',choices=('comma','semicolon','tab'));p.add_argument('--allow-display-loss',action='store_true',help='已确认接受 XLSX 数字/日期按底层值导出，不保留显示格式');a=p.parse_args()
+    delimiter={'comma':',','semicolon':';','tab':'\t'}.get(a.delimiter)
+    print('转换完成，行数:',run(a.source,a.output,a.encoding,a.sheet,a.allow_display_loss,delimiter))
+    if a.output.lower().endswith(('.csv','.tsv')):print('注意：CSV/TSV 不保存单元格类型或格式；用表格软件打开时请将编号等字段按文本导入，并对照原表复核。')
