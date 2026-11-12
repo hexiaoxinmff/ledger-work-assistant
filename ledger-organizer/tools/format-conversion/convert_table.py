@@ -1,5 +1,5 @@
 """Local CSV/XLSX value conversion, with explicit limits and verification."""
-import argparse, csv, hashlib, os, re
+import argparse, csv, hashlib, os, re, tempfile
 from openpyxl import Workbook, load_workbook
 
 
@@ -24,12 +24,6 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False):
             ws.append(row)
             for c in ws[ws.max_row]:
                 if isinstance(c.value,str):c.data_type='s'
-        with open(output,'xb') as f:w.save(f)
-        check=load_workbook(output,read_only=True,data_only=False)
-        try:
-            actual=[[v if v is not None else '' for v in row] for row in check.active.iter_rows(values_only=True)]
-            if actual!=rows:raise ValueError('转换后回读不一致')
-        finally:check.close()
     elif (src,dst)==('.xlsx','.csv'):
         w=load_workbook(source,read_only=False,data_only=False)
         try:
@@ -52,11 +46,27 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False):
                     line.append(v)
                 rows.append(line)
         finally:w.close()
-        with open(output,'x',encoding='utf-8-sig',newline='') as f:csv.writer(f).writerows(rows)
-        with open(output,encoding='utf-8-sig',newline='') as f:
-            if list(csv.reader(f,strict=True))!=rows:raise ValueError('转换后回读不一致')
     else:raise ValueError('仅支持 CSV → XLSX 或 XLSX → CSV')
-    if sha(source)!=before:raise ValueError('源文件发生变化，结果不可交付')
+    # Stage beside the destination, verify, then publish without overwriting.
+    # The temporary file may contain the same sensitive values as the source.
+    parent=os.path.dirname(os.path.abspath(output))
+    fd,tempname=tempfile.mkstemp(prefix='.ledger-conversion-',suffix='.tmp',dir=parent)
+    try:
+        if dst=='.xlsx':
+            with os.fdopen(fd,'wb') as f:w.save(f)
+            with open(tempname,'rb') as staged:
+                check=load_workbook(staged,read_only=True,data_only=False)
+                try:
+                    actual=[[v if v is not None else '' for v in row] for row in check.active.iter_rows(values_only=True)]
+                    if actual!=rows:raise ValueError('转换后回读不一致')
+                finally:check.close()
+        else:
+            with os.fdopen(fd,'w',encoding='utf-8-sig',newline='') as f:csv.writer(f).writerows(rows)
+            with open(tempname,encoding='utf-8-sig',newline='') as f:
+                if list(csv.reader(f,strict=True))!=rows:raise ValueError('转换后回读不一致')
+        if sha(source)!=before:raise ValueError('源文件发生变化，结果不可交付')
+        os.link(tempname,output)
+    finally:os.unlink(tempname)
     return len(rows)
 
 
