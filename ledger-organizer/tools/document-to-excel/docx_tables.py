@@ -16,10 +16,16 @@ def extract(path):
         root = ET.fromstring(z.read("word/document.xml"))
     body = root.find(W + "body")
     if body is None: raise ValueError("无法读取文档正文")
+    for control in body.iter(W + "sdt"):
+        if control.find('.//' + W + 'tbl') is not None:
+            raise ValueError("表格被内容控件包裹，存在不支持的特殊内容；请人工确认转换方式")
     tables = body.findall(W + "tbl")
     if not tables: raise ValueError("未发现正文表格；本工具不提取正文或 OCR")
     rows = []
     for ti, tbl in enumerate(tables, 1):
+        for tag in ('sym', 'sdt', 'fldChar', 'footnoteReference', 'endnoteReference', 'altChunk'):
+            if tbl.find('.//' + W + tag) is not None:
+                raise ValueError(f"第 {ti} 个表格包含特殊内容 {tag}，无法保证原文完整；请人工确认转换方式")
         if tbl.findall(".//" + W + "gridSpan") or tbl.findall(".//" + W + "vMerge") or tbl.findall(".//" + W + "tbl"):
             raise ValueError("合并单元格或嵌套表格需用其他方法处理")
         for ri, row in enumerate(tbl.findall(W + "tr"), 1):
