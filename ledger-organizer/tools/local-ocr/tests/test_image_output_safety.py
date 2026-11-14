@@ -21,6 +21,21 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+MODEL_PATHS = {
+    "PP-OCRv6_det_small.onnx": "/synthetic/models/det.onnx",
+    "ch_ppocr_mobile_v2.0_cls_mobile.onnx": "/synthetic/models/cls.onnx",
+    "PP-OCRv6_rec_small.onnx": "/synthetic/models/rec.onnx",
+}
+EXPECTED_PARAMS = {
+    "Det.engine_type": "onnxruntime",
+    "Det.model_path": MODEL_PATHS["PP-OCRv6_det_small.onnx"],
+    "Cls.engine_type": "onnxruntime",
+    "Cls.model_path": MODEL_PATHS["ch_ppocr_mobile_v2.0_cls_mobile.onnx"],
+    "Rec.engine_type": "onnxruntime",
+    "Rec.model_path": MODEL_PATHS["PP-OCRv6_rec_small.onnx"],
+}
+
+
 class ImageOutputSafety(unittest.TestCase):
     def fixture(self, directory):
         source = directory / "synthetic.png"
@@ -28,10 +43,14 @@ class ImageOutputSafety(unittest.TestCase):
         output = directory / "recognition.json"
         return source, output
 
-    def fake_ocr(self, *, observed_socket_methods=None):
+    def fake_ocr(self, *, observed_socket_methods=None, observed_params=None):
         package = types.ModuleType("rapidocr")
 
         class FakeRapidOCR:
+            def __init__(self, params=None):
+                if observed_params is not None:
+                    observed_params.append(params)
+
             def __call__(self, source):
                 if observed_socket_methods is not None:
                     observed_socket_methods.append(
@@ -46,9 +65,13 @@ class ImageOutputSafety(unittest.TestCase):
         package.RapidOCR = FakeRapidOCR
         return package
 
-    def run_fake(self, source, output, observed_socket_methods=None):
-        with mock.patch.object(MODULE, "check_runtime"), mock.patch.dict(
-            sys.modules, {"rapidocr": self.fake_ocr(observed_socket_methods=observed_socket_methods)}
+    def run_fake(self, source, output, observed_socket_methods=None, observed_params=None):
+        runtime = {"model_paths": MODEL_PATHS}
+        with mock.patch.object(MODULE, "check_runtime", return_value=runtime), mock.patch.dict(
+            sys.modules, {"rapidocr": self.fake_ocr(
+                observed_socket_methods=observed_socket_methods,
+                observed_params=observed_params,
+            )}
         ):
             return MODULE.run(source, output)
 
@@ -59,7 +82,9 @@ class ImageOutputSafety(unittest.TestCase):
             original_connect = socket.socket.connect
             original_connect_ex = socket.socket.connect_ex
             seen = []
-            self.assertEqual(self.run_fake(source, output, seen), 1)
+            params_seen = []
+            self.assertEqual(self.run_fake(source, output, seen, params_seen), 1)
+            self.assertEqual(params_seen, [EXPECTED_PARAMS])
             self.assertEqual(len(seen), 1)
             self.assertIsNot(seen[0][0], original_connect)
             self.assertIsNot(seen[0][1], original_connect_ex)
@@ -76,7 +101,7 @@ class ImageOutputSafety(unittest.TestCase):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
                 directory = Path(temporary)
                 source, output = self.fixture(directory)
-                with mock.patch.object(MODULE, "check_runtime"), mock.patch.dict(
+                with mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}), mock.patch.dict(
                     sys.modules, {"rapidocr": self.fake_ocr()}
                 ):
                     if failure == "write":
@@ -110,7 +135,7 @@ class ImageOutputSafety(unittest.TestCase):
                         return "changed"
                 return original_sha(path)
 
-            with mock.patch.object(MODULE, "check_runtime"), mock.patch.dict(
+            with mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}), mock.patch.dict(
                 sys.modules, {"rapidocr": self.fake_ocr()}
             ), mock.patch.object(MODULE, "sha", side_effect=changed_on_final_check):
                 with self.assertRaisesRegex(ValueError, "原图在识别期间变化"):
@@ -123,7 +148,7 @@ class ImageOutputSafety(unittest.TestCase):
             directory = Path(temporary)
             source, output = self.fixture(directory)
             output.write_bytes(b"existing output")
-            with mock.patch.object(MODULE, "check_runtime") as check:
+            with mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}) as check:
                 with self.assertRaises(FileExistsError):
                     MODULE.run(source, output)
             check.assert_not_called()
@@ -139,7 +164,7 @@ class ImageOutputSafety(unittest.TestCase):
                 Path(destination).write_bytes(b"other writer")
                 return real_link(staged, destination)
 
-            with mock.patch.object(MODULE, "check_runtime"), mock.patch.dict(
+            with mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}), mock.patch.dict(
                 sys.modules, {"rapidocr": self.fake_ocr()}
             ), mock.patch.object(MODULE.os, "link", side_effect=competing_writer):
                 with self.assertRaises(FileExistsError):

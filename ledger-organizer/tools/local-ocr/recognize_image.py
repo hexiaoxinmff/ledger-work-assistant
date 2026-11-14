@@ -31,18 +31,21 @@ def check_runtime():
     if spec is None or spec.origin is None:
         raise ValueError("未发现 rapidocr")
     model_dir = Path(spec.origin).parent / "models"
+    model_paths = {}
     for filename, expected in EXPECTED_MODELS.items():
-        model = model_dir / filename
+        model = (model_dir / filename).resolve()
         if not model.is_file() or sha(model) != expected:
             raise ValueError("本地模型缺失或哈希不符：" + filename)
+        model_paths[filename] = str(model)
     return {
         "versions": {"rapidocr": "3.10.0", "onnxruntime": "1.20.1"},
         "models_verified": list(EXPECTED_MODELS),
-        "note": "仅校验版本与模型文件哈希；未初始化引擎或验证识别效果",
+        "model_paths": model_paths,
+        "note": "已校验版本与模型文件哈希并返回显式路径；尚未初始化引擎或验证识别效果",
     }
 
 
-def _recognize_without_python_socket_access(source):
+def _recognize_without_python_socket_access(source, model_paths):
     """Limit Python socket access during inference and restore process globals afterward."""
     def deny(*args, **kwargs):
         raise OSError("OCR test: network access disabled")
@@ -54,7 +57,15 @@ def _recognize_without_python_socket_access(source):
         socket.socket.connect_ex = deny
         from rapidocr import RapidOCR
 
-        result = RapidOCR()(str(source))
+        params = {
+            "Det.engine_type": "onnxruntime",
+            "Det.model_path": model_paths["PP-OCRv6_det_small.onnx"],
+            "Cls.engine_type": "onnxruntime",
+            "Cls.model_path": model_paths["ch_ppocr_mobile_v2.0_cls_mobile.onnx"],
+            "Rec.engine_type": "onnxruntime",
+            "Rec.model_path": model_paths["PP-OCRv6_rec_small.onnx"],
+        }
+        result = RapidOCR(params=params)(str(source))
     finally:
         socket.socket.connect = original_connect
         socket.socket.connect_ex = original_connect_ex
@@ -77,9 +88,9 @@ def run(source, output):
     if os.path.lexists(output):
         raise FileExistsError(output)
 
-    check_runtime()
+    runtime = check_runtime()
     before = sha(source)
-    result = _recognize_without_python_socket_access(source)
+    result = _recognize_without_python_socket_access(source, runtime["model_paths"])
     records = []
     if result is not None and result.txts is not None:
         texts = list(result.txts)
