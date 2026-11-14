@@ -70,3 +70,10 @@ v0.30 准备检查：用拟运行 OCR 的同一解释器执行 `python tools/loc
 GitHub Actions 合成伪引擎回归检查确认传入的模型路径与运行时校验返回值一致。此项测试不启动 ONNX 引擎、不加载真实模型，也不验证识别准确率或网络隔离。真实模型初始化与数字识别仍需在隔离环境以虚构图片另行验收。
 
 接口依据：RapidOCR v3.10.0 [配置文件](https://github.com/RapidAI/RapidOCR/blob/v3.10.0/python/rapidocr/config.yaml)定义各阶段 `model_path`；[RapidOCR 初始化](https://github.com/RapidAI/RapidOCR/blob/v3.10.0/python/rapidocr/main.py)接受参数字典；[ONNX Runtime 引擎](https://github.com/RapidAI/RapidOCR/blob/v3.10.0/python/rapidocr/inference_engine/onnxruntime/main.py)仅在 `model_path` 为空时执行默认模型解析与下载。
+
+
+## v0.47 OCR 片段级来源记录
+
+网格 JSON 与人工复核 XLSX 保留每个 OCR 片段的原始序号、识别文本、模型分数、像素框及网格归属；跨单元格或未归属内容仍单列。`识别片段明细` 用于逐条追溯单元格拼接文本的组成，`未归属片段` 保留无法可靠分配的原文。导出前检查序号连续且无重复/缺失，并回读片段明细和未归属表。旧格式网格 JSON 若没有 OCR 计数或片段元数据，需从原图重新运行网格步骤后再导出。
+
+模型分数只描述引擎输出，不是数字正确概率的可靠保证，也不用于自动验收或排序为已确认结果。所有片段和空白格仍须对照原图人工核验；合成回归验证字段传递、完整性约束和回读，不验证 OCR 识别准确率。
