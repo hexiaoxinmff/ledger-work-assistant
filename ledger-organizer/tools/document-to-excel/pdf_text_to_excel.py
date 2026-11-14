@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import sys
 
 import pypdfium2 as pdfium
 from openpyxl import Workbook, load_workbook
@@ -203,7 +204,27 @@ def _verify_workbook(path, expected_rows):
         for sheet_name, expected in zip(("页码状态", "页面原文", "数字候选", "运行说明"), expected_rows):
             actual = [list(row) for row in workbook[sheet_name].iter_rows(values_only=True)]
             if actual != expected:
-                raise ValueError(f"输出回读不一致：{sheet_name}")
+                first_difference = next(
+                    (
+                        (row_index, column_index, expected_value, actual_value)
+                        for row_index, (expected_row, actual_row) in enumerate(zip(expected, actual), 1)
+                        for column_index, (expected_value, actual_value) in enumerate(zip(expected_row, actual_row), 1)
+                        if expected_value != actual_value
+                    ),
+                    None,
+                )
+                if first_difference is None:
+                    detail = f"expected_rows={len(expected)}, actual_rows={len(actual)}"
+                else:
+                    row_index, column_index, expected_value, actual_value = first_difference
+                    detail = (
+                        f"row={row_index}, column={column_index}, "
+                        f"expected_type={type(expected_value).__name__}, "
+                        f"actual_type={type(actual_value).__name__}, "
+                        f"expected_length={len(expected_value) if isinstance(expected_value, str) else 'n/a'}, "
+                        f"actual_length={len(actual_value) if isinstance(actual_value, str) else 'n/a'}"
+                    )
+                raise ValueError(f"输出回读不一致：{sheet_name}（{detail}）")
             if any(cell.data_type == "f" for row in workbook[sheet_name].iter_rows() for cell in row):
                 raise ValueError(f"输出含公式：{sheet_name}")
     finally:
@@ -255,4 +276,6 @@ if __name__ == "__main__":
     parser.add_argument("output", help="新建 XLSX 路径；不覆盖现有文件")
     args = parser.parse_args()
     import json
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="strict")
     print(json.dumps(run(args.source, args.output), ensure_ascii=False, indent=2))
