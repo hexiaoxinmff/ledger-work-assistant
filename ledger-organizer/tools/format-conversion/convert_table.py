@@ -10,6 +10,18 @@ def sha(path):
     return h.hexdigest()
 
 
+def _unsafe_csv_formula_text(value):
+    candidate = value.lstrip()
+    leading = value[:len(value) - len(candidate)]
+    if any(ord(char) < 0x20 for char in leading):
+        return True
+    if candidate.startswith(('=', '+', '@', '＝', '＋', '－', '＠')):
+        return True
+    if candidate.startswith('-') and not re.fullmatch(r'-\d+(?:\.\d+)?', candidate):
+        return True
+    return False
+
+
 def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,delimiter=None,expected_columns=None):
     if expected_columns is not None and (type(expected_columns) is not int or not 1<=expected_columns<=16384):raise ValueError('预期列数必须为 1 至 16384 的整数')
     if os.path.realpath(source)==os.path.realpath(output):raise ValueError('输出不可覆盖输入')
@@ -45,9 +57,9 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
                     if (c.data_type=='d' or (c.data_type=='n' and c.value is not None and c.number_format.lower()!='general')) and not allow_display_loss:
                         raise ValueError(f'{c.coordinate} 的数字或日期显示依赖格式；CSV 无法保存显示格式。请核对原表，如接受导出底层值可指定 --allow-display-loss')
                     v='' if c.value is None else str(c.value)
-                    # CSV opened in spreadsheet software must not silently execute formulas.
-                    if v.startswith(('=','+','@','\t','\r','\n','＝','＋','－','＠')) or (v.startswith('-') and not re.fullmatch(r'-\d+(?:\.\d+)?',v)):
-                        raise ValueError('存在可能被电子表格执行的文本，需人工处理')
+                    # Reject formula-like text even when leading whitespace may be stripped by a spreadsheet.
+                    if _unsafe_csv_formula_text(v):
+                        raise ValueError('存在可能被电子表格执行的文本（含前导空白后的公式前缀），需人工处理')
                     line.append(v)
                 rows.append(line)
         finally:w.close()
