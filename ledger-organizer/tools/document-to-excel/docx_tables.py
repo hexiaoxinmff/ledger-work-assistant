@@ -57,8 +57,8 @@ def run(source, output):
     fd, temporary = tempfile.mkstemp(
         prefix=".ledger-docx-", suffix=".xlsx", dir=parent
     )
-    os.close(fd)
     try:
+        os.close(fd)
         try:
             ws = wb.active
             ws.title = "表格单元格"
