@@ -66,15 +66,18 @@ def map_table(image, ocrfile, output):
     for ri,(y1,y2) in enumerate(zip(ys,ys[1:]),1):
         for ci,(x1,x2) in enumerate(zip(xs,xs[1:]),1):cells.append({'行':ri,'列':ci,'边界_像素':[x1,y1,x2,y2],'片段':[],'复核状态':'待人工核对原图'})
     unassigned=[]
-    for item in raw['结果']:
-        box=item.get('位置_像素');text=item.get('识别文本')
-        if not isinstance(box,list) or len(box)!=4 or not isinstance(text,str):raise ValueError('OCR 识别框格式无效')
+    for result_index,item in enumerate(raw['结果'],1):
+        box=item.get('位置_像素');text=item.get('识别文本');score=item.get('模型分数')
+        if not isinstance(box,list) or len(box)!=4 or not isinstance(text,str) or len(text)>32767:
+            raise ValueError('OCR 识别框或文本格式无效')
+        if isinstance(score,bool) or not isinstance(score,(int,float)) or not math.isfinite(score) or not 0<=score<=1:
+            raise ValueError('OCR 模型分数无效')
         try:
             bx=[float(p[0]) for p in box];by=[float(p[1]) for p in box]
         except (TypeError,ValueError,IndexError):raise ValueError('OCR 坐标无效')
         if not all(math.isfinite(v) for v in bx+by):raise ValueError('OCR 坐标无效')
         matches=[c for c in cells if min(bx)>c['边界_像素'][0] and max(bx)<c['边界_像素'][2] and min(by)>c['边界_像素'][1] and max(by)<c['边界_像素'][3]]
-        fragment={'识别文本':text,'位置_像素':box,'复核状态':'待人工核对原图'}
+        fragment={'OCR结果序号':result_index,'识别文本':text,'模型分数':float(score),'位置_像素':box,'复核状态':'待人工核对原图'}
         if len(matches)==1:matches[0]['片段'].append(fragment)
         else:unassigned.append(fragment)
     for c in cells:
@@ -82,7 +85,7 @@ def map_table(image, ocrfile, output):
         c['识别文本']=' '.join(x['识别文本'] for x in c['片段'])
     data={'用途':'仅虚构样例，自动网格及所有识别结果均须人工复核；空白格不代表原图为空',
           '来源文件名':image.name,'来源sha256':imagehash,'OCR结果sha256':ocrhash,
-          '行数':len(ys)-1,'列数':len(xs)-1,'单元格':cells,'未归属片段':unassigned}
+          '行数':len(ys)-1,'列数':len(xs)-1,'OCR识别条数':len(raw['结果']),'单元格':cells,'未归属片段':unassigned}
     if sha(image)!=imagehash or sha(ocrfile)!=ocrhash:raise ValueError('输入文件在处理期间发生变化')
     fd,temporary=tempfile.mkstemp(prefix='.ledger-grid-',suffix='.json.tmp',dir=output.parent)
     try:
