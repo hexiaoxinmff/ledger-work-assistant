@@ -26,6 +26,8 @@ class RuntimeChecks(unittest.TestCase):
                 (models/'synthetic.onnx').write_bytes(b'corrupt')
                 with self.assertRaisesRegex(ValueError,'缺失或哈希不符'):recognizer.check_runtime()
                 (models/'synthetic.onnx').write_bytes(b'synthetic model')
-                self.assertEqual(recognizer.check_runtime()['models_verified'],['synthetic.onnx'])
+                runtime=recognizer.check_runtime()
+                self.assertEqual(runtime['models_verified'],['synthetic.onnx'])
+                self.assertEqual(runtime['model_paths'],{'synthetic.onnx':str((models/'synthetic.onnx').resolve())})
 
 if __name__=='__main__':unittest.main()
