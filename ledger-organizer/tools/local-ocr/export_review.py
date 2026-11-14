@@ -44,7 +44,7 @@ def run(image,table_json,output):
             other.append([text,json.dumps(box,ensure_ascii=False),'待人工核对原图']);other.cell(other.max_row,1).data_type='s'
         note=w.create_sheet('说明');note.append(['项目','内容']);note.append(['原图文件名',image.name]);note.cell(2,2).data_type='s';note.append(['原图 SHA-256',imagehash]);note.append(['网格 JSON SHA-256',jsonhash]);note.append(['适用限制','仅虚构样例；网格和文字均须人工复核，空白不代表原图为空'])
         if sha(image)!=imagehash or sha(table_json)!=jsonhash:raise ValueError('源文件在处理期间变化')
-        fd,temporary=tempfile.mkstemp(prefix='.ledger-grid-review-',suffix='.xlsx.tmp',dir=output.parent)
+        fd,temporary=tempfile.mkstemp(prefix='.ledger-grid-review-',suffix='.tmp.xlsx',dir=output.parent)
         try:
             with os.fdopen(fd,'wb') as stream:w.save(stream)
             check=load_workbook(temporary,read_only=True,data_only=False)
