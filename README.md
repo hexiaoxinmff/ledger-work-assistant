@@ -4,7 +4,7 @@
 
 ## 安装和使用
 
-当前技能版本：v0.38。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
+当前技能版本：v0.39。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
 
 本机虚构回归入口：`python ledger-organizer/tools/run_checks.py`。默认执行基础环境/样例/转换/Word 提取测试；对账业务规则测试用 `--suite ledger`（需预装 pandas、openpyxl、PyYAML），PDF 文字层转表测试用 `--suite pdf-text`（需预装 pypdfium2、openpyxl），OCR 相关测试用 `--suite ocr`，全部用 `--suite all`。各组依赖须事先满足，报告保留失败、超时和未运行项目，不能将部分通过当成全功能通过。这些测试不包含真实账目、平台自主调用、界面或 OCR 准确率验收。
 
@@ -60,7 +60,7 @@ python ledger-organizer/tools/format-conversion/convert_table.py ledger-organize
 
 PDF 一键流程在渲染前自动检查 OCR 版本和模型哈希；也可单独运行 `python ledger-organizer/tools/local-ocr/recognize_image.py --check-runtime`，此检查无需图片，不运行识别，不证明引擎初始化或准确率。依赖不随仓库下载，代码存在也不等于 OCR 环境已准备。
 
-CSV/TSV 转换、PDF 复核表及复核汇总采用临时文件校验后不覆盖发布，目标目录需要硬链接支持。强制中断可能遗留含原文的临时文件，按资料授权处理；其他输出工具不自动具有相同保护。
+CSV/TSV 转换还会拒绝 XLSX 文本转 CSV 时可能被当作公式的前缀，包括换行和全角公式符号；普通负数保留。CSV/TSV 转换、PDF 复核表及复核汇总采用临时文件校验后不覆盖发布，目标目录需要硬链接支持。强制中断可能遗留含原文的临时文件，按资料授权处理；其他输出工具不自动具有相同保护。
 
 多页 PDF 复核默认不嵌入原页；如用户明确需要，可选择嵌入原页缩略图辅助定位。缩略图包含完整页面，可能包含表格以外的内容，分享前需按资料授权处理；数字仍以原 PDF 原尺寸人工复核。
 
