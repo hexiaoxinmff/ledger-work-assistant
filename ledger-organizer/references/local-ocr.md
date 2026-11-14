@@ -61,3 +61,12 @@ v0.30 准备检查：用拟运行 OCR 的同一解释器执行 `python tools/loc
 ## v0.43 网格中间产物与复核表发布
 
 网格 JSON 与网格转复核 XLSX 均先在目标目录暂存，检查回读结果及图片/OCR JSON 哈希后，才以硬链接发布到独占目标。失败不发布不完整目标并清理临时文件；已有目标或不支持硬链接时停止。异常中断可遗留 `.ledger-grid-`/`.ledger-grid-review-` 暂存文件。虚构伪图回归只验证输出保护与结构，不验证真实识别。
+
+
+## v0.44 显式绑定已校验模型路径
+
+运行时检查现在返回三份已通过 SHA-256 校验的模型绝对路径；识别入口将它们分别作为 `Det.model_path`、`Cls.model_path`、`Rec.model_path` 传给 RapidOCR，并将三个阶段的引擎显式设为 `onnxruntime`。RapidOCR v3.10.0 的 ONNX 引擎在未提供 `model_path` 时会解析默认模型并可能下载；本工具显式指定已校验路径，避免实际推理阶段改走默认模型解析/下载。
+
+GitHub Actions 合成伪引擎回归检查确认传入的模型路径与运行时校验返回值一致。此项测试不启动 ONNX 引擎、不加载真实模型，也不验证识别准确率或网络隔离。真实模型初始化与数字识别仍需在隔离环境以虚构图片另行验收。
+
+接口依据：RapidOCR v3.10.0 [配置文件](https://github.com/RapidAI/RapidOCR/blob/v3.10.0/python/rapidocr/config.yaml)定义各阶段 `model_path`；[RapidOCR 初始化](https://github.com/RapidAI/RapidOCR/blob/v3.10.0/python/rapidocr/main.py)接受参数字典；[ONNX Runtime 引擎](https://github.com/RapidAI/RapidOCR/blob/v3.10.0/python/rapidocr/inference_engine/onnxruntime/main.py)仅在 `model_path` 为空时执行默认模型解析与下载。
