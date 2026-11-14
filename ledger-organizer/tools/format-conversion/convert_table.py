@@ -46,7 +46,7 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
                         raise ValueError(f'{c.coordinate} 的数字或日期显示依赖格式；CSV 无法保存显示格式。请核对原表，如接受导出底层值可指定 --allow-display-loss')
                     v='' if c.value is None else str(c.value)
                     # CSV opened in spreadsheet software must not silently execute formulas.
-                    if v.startswith(('=','+','@','\t','\r')) or (v.startswith('-') and not re.fullmatch(r'-\d+(?:\.\d+)?',v)):
+                    if v.startswith(('=','+','@','\t','\r','\n','＝','＋','－','＠')) or (v.startswith('-') and not re.fullmatch(r'-\d+(?:\.\d+)?',v)):
                         raise ValueError('存在可能被电子表格执行的文本，需人工处理')
                     line.append(v)
                 rows.append(line)
