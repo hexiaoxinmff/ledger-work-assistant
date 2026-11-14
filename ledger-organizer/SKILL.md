@@ -3,7 +3,7 @@ name: ledger-organizer
 description: 根据当前平台能力转换文档、表格、PDF 和图片格式，整理用户提供的费用、收款或欠费台账，按确认的字段和规则形成可追溯的结果与待核实清单；不代替财务审核、入账或开票。
 ---
 
-# 费用与收款台账整理助手 v0.43
+# 费用与收款台账整理助手 v0.44
 
 ## 范围与能力
 需要验证下载包的脚本时，可运行 `python tools/run_checks.py` 执行基础虚构回归；`--suite ledger` 执行对账业务规则回归（需预装 pandas、openpyxl、PyYAML）；`--suite pdf-text` 执行 PDF 文字层转 Excel 回归（需预装 pypdfium2、openpyxl）；`--suite ocr` 单测 OCR 相关结构/复核；`--suite all` 执行全部组。报告列出实际解释器、每组输出、失败/超时及未运行组；不安装依赖。仅对选择且实际执行的组报告通过，不能代替目标平台或真实业务验收。
@@ -128,3 +128,8 @@ XLSX 导出 CSV 时，若文本以换行符或全角公式前缀 ＝、＋、－
 ## v0.43 网格 JSON 和复核 XLSX 安全发布
 
 `table_grid.py` 与 `export_review.py` 均先写同目录临时文件，回读结构并重验来源哈希后再用硬链接原子发布；已有目标不覆盖，失败会清理暂存文件。模拟异常回归使用虚构图片字节、OCR JSON 和伪网格，不验证真实网格识别或数字准确度。突然终止时仍可能遗留 `.ledger-grid-` 或 `.ledger-grid-review-` 临时文件，按源资料要求检查。
+
+
+## v0.44 OCR 模型加载路径校验
+
+本地 OCR 运行时校验返回已核验的三个模型绝对路径，识别器显式将它们传入 RapidOCR 的检测、方向分类和文本识别阶段，并固定使用 ONNX Runtime。不要把模型文件哈希校验或伪引擎回归说成已经初始化模型或证明识别准确；完整边界见 `references/local-ocr.md`。
