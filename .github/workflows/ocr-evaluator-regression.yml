@@ -30,3 +30,6 @@ jobs:
           python-version: "3.12"
       - name: Run OCR evaluator regression tests
         run: python -m unittest discover -s ledger-organizer/tools/local-ocr/tests -p test_evaluate_accuracy.py -v
+
+      - name: Run OCR output safety regression tests
+        run: python -m unittest discover -s ledger-organizer/tools/local-ocr/tests -p test_image_output_safety.py -v
