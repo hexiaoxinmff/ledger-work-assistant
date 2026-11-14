@@ -10,6 +10,8 @@ v0.30 准备检查：用拟运行 OCR 的同一解释器执行 `python tools/loc
 
 2026-11-14 使用 v0.36 固定版本/模型哈希通过后的实际识别入口，对 24 张虚构挑战图再测：数字字符及分隔符完全一致 22/24。两项低质量图片仍有误识别：`1,234.56` 被识别为 `1.23456`，`(88.00)` 被识别为 `(86.00)`。运行时/模型准备成功不代表识别可靠；所有结果仍须人工逐字符比对。样本为人工生成、数量有限，不可外推为真实单据准确率。具体结果不随公开包发布。
 
+若 PDF 有可提取文字层，先评估 `tools/document-to-excel/pdf_text_to_excel.py`；它不运行 OCR。无文字层或混合扫描页按页码状态转入 OCR 或人工查看；不得因某页没有提取文字就把它判断为空白。
+
 
 ## v0.21 简单网格表实验
 单张虚构图片可依次调用 `recognize_image.py image.png ocr.json`、`table_grid.py image.png ocr.json grid.json` 和 `export_review.py image.png grid.json review.xlsx`。前两步需要指定 OCR 环境（含 OpenCV/Numpy），第三步需要 Python 与 openpyxl。工具不安装依赖，输出独占创建；图像和中间结果按 SHA-256 核验。

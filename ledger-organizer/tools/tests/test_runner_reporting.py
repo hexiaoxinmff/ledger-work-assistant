@@ -14,9 +14,10 @@ import run_checks
 class RunnerReporting(unittest.TestCase):
     def test_suite_selection_and_unrun_groups(self):
         expected={
-            'core':{'tools/fcs-adapted/tests','tools/local-ocr/tests'},
-            'ledger':{'tools/tests','tools/format-conversion/tests','tools/document-to-excel/tests','tools/local-ocr/tests'},
-            'ocr':{'tools/tests','tools/format-conversion/tests','tools/document-to-excel/tests','tools/fcs-adapted/tests'},
+            'core':{'tools/fcs-adapted/tests','tools/pdf-text/tests','tools/local-ocr/tests'},
+            'ledger':{'tools/tests','tools/format-conversion/tests','tools/document-to-excel/tests','tools/pdf-text/tests','tools/local-ocr/tests'},
+            'pdf-text':{'tools/tests','tools/format-conversion/tests','tools/document-to-excel/tests','tools/fcs-adapted/tests','tools/local-ocr/tests'},
+            'ocr':{'tools/tests','tools/format-conversion/tests','tools/document-to-excel/tests','tools/fcs-adapted/tests','tools/pdf-text/tests'},
             'all':set(),
         }
         for suite,not_run in expected.items():

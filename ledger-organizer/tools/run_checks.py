@@ -14,7 +14,8 @@ ROOT=Path(__file__).resolve().parents[1]
 CORE=('tools/tests','tools/format-conversion/tests','tools/document-to-excel/tests')
 LEDGER=('tools/fcs-adapted/tests',)
 OCR=('tools/local-ocr/tests',)
-SUITES={'core':CORE,'ledger':LEDGER,'ocr':OCR,'all':CORE+LEDGER+OCR}
+PDF_TEXT=('tools/pdf-text/tests',)
+SUITES={'core':CORE,'ledger':LEDGER,'pdf-text':PDF_TEXT,'ocr':OCR,'all':CORE+LEDGER+PDF_TEXT+OCR}
 
 def run_suite(directory,timeout):
     path=ROOT/directory

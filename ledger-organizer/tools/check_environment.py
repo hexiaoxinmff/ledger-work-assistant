@@ -3,9 +3,9 @@ import argparse, importlib.util, json, platform, subprocess, sys
 from pathlib import Path
 root=Path(__file__).resolve().parent
 modules={name:importlib.util.find_spec(name) is not None for name in ("openpyxl","pandas","yaml","rapidocr","onnxruntime","cv2","numpy","pypdfium2")}
-tools={"docx_tables":(root/"document-to-excel/docx_tables.py").is_file(),"table_conversion":(root/"format-conversion/convert_table.py").is_file(),"ledger_reconcile":(root/"fcs-adapted/scripts/reconcile.py").is_file(),"local_ocr":(root/"local-ocr/recognize_image.py").is_file(),"table_grid":(root/"local-ocr/table_grid.py").is_file(),"export_review":(root/"local-ocr/export_review.py").is_file(),"pdf_pipeline":(root/"local-ocr/pipeline_pdf.py").is_file(),"collect_review":(root/"local-ocr/collect_review.py").is_file()}
+tools={"docx_tables":(root/"document-to-excel/docx_tables.py").is_file(),"pdf_text":(root/"document-to-excel/pdf_text_to_excel.py").is_file(),"pdf_text_to_excel":(root/"document-to-excel/pdf_text_to_excel.py").is_file(),"table_conversion":(root/"format-conversion/convert_table.py").is_file(),"ledger_reconcile":(root/"fcs-adapted/scripts/reconcile.py").is_file(),"local_ocr":(root/"local-ocr/recognize_image.py").is_file(),"table_grid":(root/"local-ocr/table_grid.py").is_file(),"export_review":(root/"local-ocr/export_review.py").is_file(),"pdf_pipeline":(root/"local-ocr/pipeline_pdf.py").is_file(),"collect_review":(root/"local-ocr/collect_review.py").is_file()}
 requirements={
- "table_conversion":("openpyxl",), "docx_tables":("openpyxl",),
+ "table_conversion":("openpyxl",), "docx_tables":("openpyxl",), "pdf_text":("pypdfium2","openpyxl"),
  "ledger_reconcile":("openpyxl","pandas","yaml"),
  "local_ocr":("rapidocr","onnxruntime","cv2","numpy"),
  "pdf_pipeline":("rapidocr","onnxruntime","cv2","numpy","pypdfium2","openpyxl","PIL"),
@@ -13,7 +13,14 @@ requirements={
 }
 
 def probe(module,timeout=15):
-    code="import importlib,json,sys; imported=importlib.import_module(sys.argv[1]); print(json.dumps({'version':str(getattr(imported,'__version__','unknown')),'location':str(getattr(imported,'__file__','unknown'))}))"
+    code="""import importlib, importlib.metadata, json, sys
+imported = importlib.import_module(sys.argv[1])
+version = getattr(imported, '__version__', None)
+try:
+    version = version or importlib.metadata.version(sys.argv[1])
+except importlib.metadata.PackageNotFoundError:
+    version = version or 'unknown'
+print(json.dumps({'version': str(version), 'location': str(getattr(imported, '__file__', 'unknown'))}))"""
     try:
         result=subprocess.run([sys.executable,'-c',code,module],capture_output=True,text=True,encoding='utf8',errors='replace',timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -40,6 +47,6 @@ def main():
     print(json.dumps(report,ensure_ascii=False))
     return exit_code
 
-paths={"table_conversion":"format-conversion/convert_table.py","docx_tables":"document-to-excel/docx_tables.py","ledger_reconcile":"fcs-adapted/scripts/reconcile.py","local_ocr":"local-ocr/recognize_image.py","pdf_pipeline":"local-ocr/pipeline_pdf.py","collect_review":"local-ocr/collect_review.py"}
+paths={"table_conversion":"format-conversion/convert_table.py","docx_tables":"document-to-excel/docx_tables.py","pdf_text":"document-to-excel/pdf_text_to_excel.py","ledger_reconcile":"fcs-adapted/scripts/reconcile.py","local_ocr":"local-ocr/recognize_image.py","pdf_pipeline":"local-ocr/pipeline_pdf.py","collect_review":"local-ocr/collect_review.py"}
 
 if __name__=='__main__':sys.exit(main())

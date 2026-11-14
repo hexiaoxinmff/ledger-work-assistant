@@ -13,6 +13,11 @@ class EnvironmentChecks(unittest.TestCase):
         self.assertEqual(environment.probe('json')['status'],'imported')
         self.assertEqual(environment.probe('ledger_synthetic_missing_dependency')['status'],'import_failed')
 
+    def test_pdf_text_task_checks_dependencies_and_entrypoint(self):
+        self.assertEqual(environment.requirements['pdf_text'],('pypdfium2','openpyxl'))
+        self.assertTrue(environment.tools['pdf_text'])
+        self.assertEqual(environment.paths['pdf_text'],'document-to-excel/pdf_text_to_excel.py')
+
     def test_timeout_crash_and_bad_output(self):
         with patch.object(environment.subprocess,'run',side_effect=subprocess.TimeoutExpired('probe',15)):
             self.assertEqual(environment.probe('json')['status'],'timeout')
