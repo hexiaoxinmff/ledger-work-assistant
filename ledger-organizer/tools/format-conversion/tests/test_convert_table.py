@@ -62,6 +62,20 @@ class ConvertTable(unittest.TestCase):
    with self.assertRaisesRegex(ValueError,'公式'):module.run(str(bad),str(out),allow_display_loss=True)
    self.assertFalse(out.exists())
 
+ def test_formula_guard_checks_prefix_after_leading_whitespace(self):
+  dangerous=[' =1+1','  +SUM(A1)','\t@SUM(A1)','\n＝1+1','  －cmd']
+  for value in dangerous:
+   with self.subTest(value=value),tempfile.TemporaryDirectory() as tmp:
+    d=Path(tmp);source=d/'source.xlsx';output=d/'output.csv'
+    workbook=Workbook();workbook.active['A1']=value;workbook.save(source);workbook.close()
+    with self.assertRaisesRegex(ValueError,'前导空白后的公式前缀'):
+     module.run(str(source),str(output),allow_display_loss=True)
+    self.assertFalse(output.exists())
+    self.assertEqual(list(d.glob('.ledger-conversion-*')),[])
+  self.assertFalse(module._unsafe_csv_formula_text('-12.00'))
+  self.assertFalse(module._unsafe_csv_formula_text('  -12.00'))
+  self.assertFalse(module._unsafe_csv_formula_text('Amount =1+1'))
+
  def test_failed_or_changed_conversion_never_publishes_output(self):
   with tempfile.TemporaryDirectory() as tmp:
    directory=Path(tmp);csv_source=directory/'input.csv';xlsx_output=directory/'output.xlsx'

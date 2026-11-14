@@ -40,3 +40,8 @@ CSV/XLSX 互转先在输出同目录生成 `.ledger-conversion-` 临时文件，
 ## v0.39 CSV 公式前缀防护
 
 XLSX → CSV 对可能被电子表格解释为公式的文本采取拒绝导出策略。除 ASCII =、+、@、制表符、回车和非数值的 - 前缀外，也拒绝以换行符和全角 ＝、＋、－、＠ 开头的值；普通 ASCII 负数如 -12.00 仍可导出。虚构回归在 Python 3.12 的 GitHub Actions Ubuntu 和 Windows runner 上通过；未验证 Excel/LibreOffice GUI 打开、另存后的行为，也未使用真实账目测试。来源参考：OWASP CSV Injection（https://owasp.org/www-community/attacks/CSV_Injection）。
+
+
+## v0.46 前导空白后的公式风险
+
+XLSX → CSV 检查单元格文本时，会先检查去掉前导空白后的内容是否以公式前缀开头；若有前导控制字符，或去空白后出现 `= + @` 及全角变体，拒绝导出，原始文本不改写。以空白开头的普通负数仍按数值格式规则检查。该保守拦截避免用户打开 CSV 时，表格软件去除前导空白后把内容解释为公式；需人工审阅该单元格并决定安全导出方式。回归仅验证工具拦截逻辑，不代替 Excel/WPS/LibreOffice 实际打开测试。
