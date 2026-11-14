@@ -32,6 +32,11 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def _normalize_line_endings(value):
+    """Use LF consistently because XLSX/XML readers normalize literal CR characters."""
+    return value.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def _safe_text(value):
     for char in value:
         code = ord(char)
@@ -103,7 +108,7 @@ def _extract(pdf_path):
             text_page = None
             try:
                 text_page = page.get_textpage()
-                text = _safe_text(text_page.get_text_bounded())
+                text = _safe_text(_normalize_line_endings(text_page.get_text_bounded()))
                 candidates = []
                 for match in NUMBER.finditer(text):
                     start, end = match.span()
