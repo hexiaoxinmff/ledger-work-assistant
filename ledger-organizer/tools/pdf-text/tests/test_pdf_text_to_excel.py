@@ -51,6 +51,12 @@ def make_pdf(path, page_streams):
 
 
 class PdfTextToExcel(unittest.TestCase):
+    def test_pdf_line_endings_are_normalized_before_excel_export(self):
+        self.assertEqual(
+            module._normalize_line_endings("first\r\nsecond\rthird\nfourth"),
+            "first\nsecond\nthird\nfourth",
+        )
+
     def test_number_candidates_require_complete_token_boundaries(self):
         valid = "ID 001234567890123456789 Amount 1,234.56 Balance (88.00) Rate 12% signed −45.60"
         self.assertEqual(
