@@ -63,6 +63,16 @@ class EvaluateAccuracy(unittest.TestCase):
                 {"结果": [{"识别文本": "abc", "复核状态": "已确认"}]},
             )
 
+    def test_rejects_unmapped_rows_that_lost_review_status(self):
+        with self.assertRaisesRegex(ValueError, "所有 OCR 结果"):
+            MODULE.evaluate(
+                {"cases": [{"id": "text-1", "field_type": "text", "expected": "abc", "result_index": 0}]},
+                {"结果": [
+                    {"识别文本": "abc", "复核状态": PENDING},
+                    {"识别文本": "extra", "复核状态": "已确认"},
+                ]},
+            )
+
     def test_rejects_duplicate_case_ids_and_result_indexes(self):
         base = {"id": "x", "field_type": "text", "expected": "x", "result_index": 0}
         with self.assertRaisesRegex(ValueError, "唯一"):
