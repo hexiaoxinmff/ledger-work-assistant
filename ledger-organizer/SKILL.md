@@ -3,7 +3,7 @@ name: ledger-organizer
 description: 根据当前平台能力转换文档、表格、PDF 和图片格式，整理用户提供的费用、收款或欠费台账，按确认的字段和规则形成可追溯的结果与待核实清单；不代替财务审核、入账或开票。
 ---
 
-# 费用与收款台账整理助手 v0.39
+# 费用与收款台账整理助手 v0.40
 
 ## 范围与能力
 需要验证下载包的脚本时，可运行 `python tools/run_checks.py` 执行基础虚构回归；`--suite ledger` 执行对账业务规则回归（需预装 pandas、openpyxl、PyYAML）；`--suite pdf-text` 执行 PDF 文字层转 Excel 回归（需预装 pypdfium2、openpyxl）；`--suite ocr` 单测 OCR 相关结构/复核；`--suite all` 执行全部组。报告列出实际解释器、每组输出、失败/超时及未运行组；不安装依赖。仅对选择且实际执行的组报告通过，不能代替目标平台或真实业务验收。
@@ -109,3 +109,8 @@ CSV/XLSX 互转会先在输出目录创建 `.ledger-conversion-` 临时文件，
 ## v0.39 CSV 公式前缀防护
 
 XLSX 导出 CSV 时，若文本以换行符或全角公式前缀 ＝、＋、－、＠ 开头，工具会停止导出并提示人工处理；普通 ASCII 负数仍按既有规则允许。新增虚构回归已在 GitHub Actions 的 Python 3.12 Ubuntu 和 Windows 环境通过。该测试不证明 Excel/LibreOffice 图形界面打开、保存后的行为，公式相关文本不得未经人工确认直接导出或使用。
+
+
+## v0.40 OCR 字段评分
+
+对虚构 OCR 输出，可用 `tools/local-ocr/evaluate_accuracy.py` 按人工真值统计字段完全匹配率和字符错误率。它不运行 OCR 或证明识别准确，标点按原文比较；缺失行计错、额外行单列。所有结果保持待人工复核，高分或完全匹配均不得自动确认。真值与识别报告含文本，只能用虚构数据；详见 `references/local-ocr.md`。
