@@ -30,6 +30,9 @@ GRID = load_with_fake_vision_modules()
 SPEC = importlib.util.spec_from_file_location("export_review_under_test", HERE / "export_review.py")
 EXPORT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(EXPORT)
+PDF_SPEC=importlib.util.spec_from_file_location("export_pdf_review_under_test",HERE/"export_pdf_review.py")
+EXPORT_PDF=importlib.util.module_from_spec(PDF_SPEC)
+PDF_SPEC.loader.exec_module(EXPORT_PDF)
 
 
 def sha(path):
@@ -109,6 +112,64 @@ class GridOutputSafety(unittest.TestCase):
                     EXPORT.run(image,grid_json,output)
                 self.assertFalse(output.exists())
                 self.assertEqual(list(directory.glob(".ledger-grid-review-*")),[])
+
+    def test_multipage_pdf_review_retains_fragment_scores_and_unassigned_text(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory=Path(temporary);pages=directory/"pages";pages.mkdir()
+            pdf=directory/"synthetic.pdf";pdf.write_bytes(b"synthetic PDF bytes")
+            image=pages/"page_0001.png";image.write_bytes(b"synthetic page image")
+            image_hash=sha(image)
+            ocr=pages/"page_0001_ocr.json"
+            ocr_data={"来源sha256":image_hash,"结果":[
+                {"识别文本":"00042","位置_像素":[[20,20],[30,20],[30,30],[20,30]],"模型分数":0.99},
+                {"识别文本":"跨界文字","位置_像素":[[95,20],[105,20],[105,30],[95,30]],"模型分数":0.61},
+            ]}
+            ocr.write_text(json.dumps(ocr_data,ensure_ascii=False),encoding="utf8")
+            grid_json=pages/"page_0001_grid.json"
+            with mock.patch.object(GRID,"lines",return_value=([10,100],[10,100])):
+                GRID.map_table(image,ocr,grid_json)
+            pdf_hash=sha(pdf)
+            (pages/"pages.json").write_text(json.dumps({
+                "source_sha256":pdf_hash,"page_count":1,
+                "pages":[{"page":1,"image":"page_0001.png","sha256":image_hash}],
+            }),encoding="utf8")
+            output=directory/"review.xlsx"
+            self.assertEqual(EXPORT_PDF.run(pdf,pages,output),(1,1,1))
+            from openpyxl import load_workbook
+            workbook=load_workbook(output,read_only=True,data_only=False)
+            try:
+                details=list(workbook["识别片段明细"].values)
+                self.assertEqual(details[1][0:7],(1,1,1,1,"已归入网格单元格","00042",0.99))
+                self.assertEqual(details[2][0:7],(1,2,None,None,"未归属","跨界文字",0.61))
+                missing=list(workbook["未归属片段"].values)
+                self.assertEqual(missing[1][0:4],(1,2,"跨界文字",0.61))
+                self.assertIn("模型分数只作参考",workbook["来源"]["B5"].value)
+            finally:
+                workbook.close()
+            self.assertEqual(list(directory.glob(".ledger-pdf-review-*")),[])
+
+    def test_multipage_pdf_export_rejects_old_grid_without_fragment_count(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory=Path(temporary);pages=directory/"pages";pages.mkdir()
+            pdf=directory/"synthetic.pdf";pdf.write_bytes(b"synthetic PDF bytes")
+            image=pages/"page_0001.png";image.write_bytes(b"synthetic page image")
+            image_hash=sha(image);ocr=pages/"page_0001_ocr.json"
+            ocr.write_text(json.dumps({"来源sha256":image_hash,"结果":[]}),encoding="utf8")
+            grid=pages/"page_0001_grid.json"
+            grid.write_text(json.dumps({
+                "来源sha256":image_hash,"OCR结果sha256":sha(ocr),"行数":1,"列数":1,
+                "单元格":[{"行":1,"列":1,"识别文本":"","边界_像素":[10,10,100,100],"片段":[]}],
+                "未归属片段":[],
+            }),encoding="utf8")
+            (pages/"pages.json").write_text(json.dumps({
+                "source_sha256":sha(pdf),"page_count":1,
+                "pages":[{"page":1,"image":"page_0001.png","sha256":image_hash}],
+            }),encoding="utf8")
+            output=directory/"review.xlsx"
+            with self.assertRaisesRegex(ValueError,"缺少 OCR 识别条数"):
+                EXPORT_PDF.run(pdf,pages,output)
+            self.assertFalse(output.exists())
+            self.assertEqual(list(directory.glob(".ledger-pdf-review-*")),[])
 
     def test_grid_json_failures_never_publish_or_overwrite(self):
         for failure in ("write", "readback", "source changed", "race"):
