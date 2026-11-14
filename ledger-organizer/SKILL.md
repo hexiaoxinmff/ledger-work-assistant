@@ -3,7 +3,7 @@ name: ledger-organizer
 description: 根据当前平台能力转换文档、表格、PDF 和图片格式，整理用户提供的费用、收款或欠费台账，按确认的字段和规则形成可追溯的结果与待核实清单；不代替财务审核、入账或开票。
 ---
 
-# 费用与收款台账整理助手 v0.37
+# 费用与收款台账整理助手 v0.38
 
 ## 范围与能力
 需要验证下载包的脚本时，可运行 `python tools/run_checks.py` 执行基础虚构回归；`--suite ledger` 执行对账业务规则回归（需预装 pandas、openpyxl、PyYAML）；`--suite pdf-text` 执行 PDF 文字层转 Excel 回归（需预装 pypdfium2、openpyxl）；`--suite ocr` 单测 OCR 相关结构/复核；`--suite all` 执行全部组。报告列出实际解释器、每组输出、失败/超时及未运行组；不安装依赖。仅对选择且实际执行的组报告通过，不能代替目标平台或真实业务验收。
@@ -57,7 +57,7 @@ PDF 一键流程自动先检查 OCR 固定版本和模型哈希，失败时尚�
 内置 Word 提取器遇到表格内符号、内容控件、复杂域标记或脚注/尾注引用，或表格被内容控件包裹时停止；这些内容可能影响数字含义或完整性，须用适合的文档工具并人工确认。该拦截不保证穷尽 Word 特殊结构。
 用户要求转换文档时读取 `references/document-to-excel.md`；先识别文档类型和页面范围，逐项保留来源及数字原貌，无法准确辨认的值标记待核实。可用平台现有 PDF、文档、图像和表格能力；扫描件依赖当前环境实际 OCR/视觉能力，不保证识别准确。本包 `tools/document-to-excel/docx_tables.py` 只支持可提取文本的简单 DOCX 表格，不处理扫描件或 PDF，使用前核对环境；所有数据仅限虚构样例测试。
 
-对于包含可搜索文字层的 PDF，可用 `tools/document-to-excel/pdf_text_to_excel.py` 生成逐页原文、数字候选、字符偏移及页码状态复核工作簿。该工具不做 OCR 或表格列重建；图片文字、矢量转曲文字和批注可能未提取，混合页会标出未发现文字层的页，整份 PDF 没有可提取文字时停止。运行前用 `python tools/check_environment.py --task pdf_text` 检查 pypdfium2 与 openpyxl。输出数字和文字均待对照原 PDF 复核，不得据此自动入账。
+对于包含可搜索文字层的 PDF，可用 `tools/document-to-excel/pdf_text_to_excel.py` 生成逐页原文、数字候选、字符偏移、可用的 PDF 页内坐标及页码状态复核工作簿。坐标仅在 PDFium 精确搜索唯一、字符范围核对通过时填写；重复值或索引不一致不提供坐标。该工具不做 OCR 或表格列重建；图片文字、矢量转曲文字和批注可能未提取，混合页会标出未发现文字层的页，整份 PDF 没有可提取文字时停止。运行前用 `python tools/check_environment.py --task pdf_text` 检查 pypdfium2 与 openpyxl。输出数字和文字均待对照原 PDF 复核，不得据此自动入账。
 
 
 ## 按需转换文件格式

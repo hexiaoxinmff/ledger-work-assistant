@@ -51,6 +51,36 @@ def make_pdf(path, page_streams):
 
 
 class PdfTextToExcel(unittest.TestCase):
+    def test_uncertain_text_search_never_emits_coordinates(self):
+        class Searcher:
+            def __init__(self, matches):
+                self.matches = iter(matches)
+            def get_next(self):
+                return next(self.matches, None)
+            def close(self):
+                pass
+
+        class MismatchedPage:
+            def search(self, *_args, **_kwargs):
+                return Searcher([(10, 4)])
+            def get_text_range(self, *_args):
+                return "9999"
+            def get_charbox(self, _index):
+                raise AssertionError("mismatched text must not request boxes")
+
+        class BrokenBoxPage(MismatchedPage):
+            def get_text_range(self, *_args):
+                return "1234"
+            def get_charbox(self, _index):
+                raise IndexError("synthetic PDFium index mismatch")
+
+        box, status = module._locate_unique_candidate(MismatchedPage(), "1234")
+        self.assertIsNone(box)
+        self.assertIn("不一致", status)
+        box, status = module._locate_unique_candidate(BrokenBoxPage(), "1234")
+        self.assertIsNone(box)
+        self.assertIn("异常", status)
+
     def test_cli_emits_report_and_creates_review_workbook(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
@@ -67,7 +97,7 @@ class PdfTextToExcel(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             source, output = directory / "synthetic.pdf", directory / "review.xlsx"
-            text = b"BT /F1 12 Tf 72 720 Td (ID 001234567890123456789 Amount 1,234.56 Balance \\(88.00\\) Zero 0.00 Formula =1+1) Tj ET"
+            text = b"BT /F1 12 Tf 72 720 Td (ID 001234567890123456789 Amount 1,234.56 Balance \\(88.00\\) Zero 0.00 Repeat 0.00 Formula =1+1) Tj ET"
             make_pdf(source, [text, None])
             before = hashlib.sha256(source.read_bytes()).hexdigest()
             result = module.run(source, output)
@@ -94,7 +124,15 @@ class PdfTextToExcel(unittest.TestCase):
                 self.assertIn("0.00", candidates)
                 for row in workbook["数字候选"].iter_rows(min_row=2):
                     self.assertEqual(row[2].data_type, "s")
-                    self.assertEqual(row[4].value, "待人工逐字符核对原页")
+                    self.assertEqual(row[9].value, "待人工逐字符核对原页")
+                unique_amount = next(row for row in candidate_rows[1:] if row[2] == "1,234.56")
+                self.assertEqual(unique_amount[8], "已唯一定位（仅供原页定位）")
+                self.assertIsNotNone(unique_amount[4])
+                self.assertLess(unique_amount[4], unique_amount[6])
+                repeated_zeroes = [row for row in candidate_rows[1:] if row[2] == "0.00"]
+                self.assertEqual(len(repeated_zeroes), 2)
+                self.assertTrue(all(row[4:8] == (None, None, None, None) for row in repeated_zeroes))
+                self.assertTrue(all(row[8] == "同值在本页多处出现，未定位" for row in repeated_zeroes))
                 self.assertFalse(any(cell.data_type == "f" for row in workbook["页面原文"].iter_rows() for cell in row))
             finally:
                 workbook.close()

@@ -4,7 +4,7 @@
 
 ## 安装和使用
 
-当前技能版本：v0.37。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
+当前技能版本：v0.38。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
 
 本机虚构回归入口：`python ledger-organizer/tools/run_checks.py`。默认执行基础环境/样例/转换/Word 提取测试；对账业务规则测试用 `--suite ledger`（需预装 pandas、openpyxl、PyYAML），PDF 文字层转表测试用 `--suite pdf-text`（需预装 pypdfium2、openpyxl），OCR 相关测试用 `--suite ocr`，全部用 `--suite all`。各组依赖须事先满足，报告保留失败、超时和未运行项目，不能将部分通过当成全功能通过。这些测试不包含真实账目、平台自主调用、界面或 OCR 准确率验收。
 
@@ -48,7 +48,7 @@ python ledger-organizer/tools/format-conversion/convert_table.py ledger-organize
 
 简单 DOCX 表格转换生成结构化表、来源明细及含数字原文复核清单，筛选不代表已核对。特殊符号、域标记、脚注/尾注引用、内容控件等不支持结构会停止，需另选方式并人工确认；该检查不能穷尽所有 Word 结构。环境自检不带参数时仅检查模块和文件能否发现，带 `--task` 才实际探测相应依赖导入。
 
-可搜索 PDF 的文字层可用 `ledger-organizer/tools/document-to-excel/pdf_text_to_excel.py` 导出逐页原文、页码状态和数字候选复核工作簿；不做 OCR，也不猜表格列。图片文字、矢量转曲文字和批注可能未提取；扫描页逐页标明，整份没有文字层则停止。使用前运行 `python ledger-organizer/tools/check_environment.py --task pdf_text`；提取的每个数字仍须对照 PDF 原页核对。
+可搜索 PDF 的文字层可用 `ledger-organizer/tools/document-to-excel/pdf_text_to_excel.py` 导出逐页原文、页码状态、数字候选和可用的页内坐标（PDF canvas units）；坐标仅在数字唯一且字符范围校验通过时提供，不能证明数字正确。不做 OCR，也不猜表格列。图片文字、矢量转曲文字和批注可能未提取；扫描页逐页标明，整份没有文字层则停止。使用前运行 `python ledger-organizer/tools/check_environment.py --task pdf_text`；提取的每个数字仍须对照 PDF 原页核对。
 
 ## 本地图片 OCR 实验
 
