@@ -1,0 +1,38 @@
+name: PDF text conversion regression
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/pdf-text-regression.yml"
+      - "ledger-organizer/tools/document-to-excel/pdf_text_to_excel.py"
+      - "ledger-organizer/tools/pdf-text/**"
+      - "ledger-organizer/references/document-to-excel.md"
+      - "ledger-organizer/SKILL.md"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/pdf-text-regression.yml"
+      - "ledger-organizer/tools/document-to-excel/pdf_text_to_excel.py"
+      - "ledger-organizer/tools/pdf-text/**"
+      - "ledger-organizer/references/document-to-excel.md"
+      - "ledger-organizer/SKILL.md"
+
+jobs:
+  synthetic-pdf:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: ledger-organizer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PDF text test dependencies
+        run: python -m pip install --disable-pip-version-check pypdfium2 openpyxl
+      - name: Run synthetic searchable-PDF regression suite
+        run: python -m unittest discover -s tools/pdf-text/tests -v
