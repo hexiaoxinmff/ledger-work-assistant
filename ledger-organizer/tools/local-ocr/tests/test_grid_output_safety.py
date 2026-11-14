@@ -46,6 +46,11 @@ class GridOutputSafety(unittest.TestCase):
             "结果": [{
                 "识别文本": "00042",
                 "位置_像素": [[20, 20], [30, 20], [30, 30], [20, 30]],
+                "模型分数": 0.99,
+            }, {
+                "识别文本": "跨界文字",
+                "位置_像素": [[95, 20], [105, 20], [105, 30], [95, 30]],
+                "模型分数": 0.61,
             }],
         }
         ocr.write_text(json.dumps(ocr_data, ensure_ascii=False), encoding="utf8")
@@ -61,13 +66,49 @@ class GridOutputSafety(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             image, ocr, grid_json, _ = self.fixtures(directory)
-            self.assertEqual(self.map_fake(image, ocr, grid_json), (1, 0))
+            self.assertEqual(self.map_fake(image, ocr, grid_json), (1, 1))
             data = json.loads(grid_json.read_text(encoding="utf8"))
             self.assertEqual(data["来源sha256"], sha(image))
             self.assertEqual(data["OCR结果sha256"], sha(ocr))
             self.assertEqual(data["单元格"][0]["识别文本"], "00042")
             self.assertEqual(data["单元格"][0]["复核状态"], "待人工核对原图")
+            self.assertEqual(data["OCR识别条数"], 2)
+            self.assertEqual(data["单元格"][0]["片段"][0]["OCR结果序号"], 1)
+            self.assertEqual(data["单元格"][0]["片段"][0]["模型分数"], 0.99)
+            self.assertEqual(data["未归属片段"][0]["OCR结果序号"], 2)
+            self.assertEqual(data["未归属片段"][0]["模型分数"], 0.61)
             self.assertEqual(list(directory.glob(".ledger-grid-*")), [])
+
+    def test_invalid_ocr_scores_stop_grid_mapping(self):
+        import math
+        for score in (None, -0.1, 1.1, "0.9", math.nan, True):
+            with self.subTest(score=score), tempfile.TemporaryDirectory() as temporary:
+                directory=Path(temporary);image,ocr,output,_=self.fixtures(directory)
+                raw=json.loads(ocr.read_text(encoding="utf8"))
+                raw["结果"][0]["模型分数"]=score
+                ocr.write_text(json.dumps(raw,ensure_ascii=False),encoding="utf8")
+                with mock.patch.object(GRID,"lines",return_value=([10,100],[10,100])):
+                    with self.assertRaisesRegex(ValueError,"OCR 模型分数无效"):
+                        GRID.map_table(image,ocr,output)
+                self.assertFalse(output.exists())
+                self.assertEqual(list(directory.glob(".ledger-grid-*")),[])
+
+    def test_review_export_rejects_missing_or_duplicate_fragment_indexes(self):
+        for corruption in ("missing","duplicate"):
+            with self.subTest(corruption=corruption),tempfile.TemporaryDirectory() as temporary:
+                directory=Path(temporary);image,ocr,grid_json,output=self.fixtures(directory)
+                self.map_fake(image,ocr,grid_json)
+                data=json.loads(grid_json.read_text(encoding="utf8"))
+                if corruption=="missing":
+                    data["单元格"][0]["片段"].clear()
+                    data["单元格"][0]["识别文本"]=""
+                else:
+                    data["未归属片段"][0]["OCR结果序号"]=1
+                grid_json.write_text(json.dumps(data,ensure_ascii=False),encoding="utf8")
+                with self.assertRaisesRegex(ValueError,"OCR 片段存在缺失、重复或序号不连续"):
+                    EXPORT.run(image,grid_json,output)
+                self.assertFalse(output.exists())
+                self.assertEqual(list(directory.glob(".ledger-grid-review-*")),[])
 
     def test_grid_json_failures_never_publish_or_overwrite(self):
         for failure in ("write", "readback", "source changed", "race"):
@@ -152,12 +193,18 @@ class GridOutputSafety(unittest.TestCase):
             directory = Path(temporary)
             image, ocr, grid_json, output = self.fixtures(directory)
             self.map_fake(image, ocr, grid_json)
-            self.assertEqual(EXPORT.run(image, grid_json, output), (1, 0))
+            self.assertEqual(EXPORT.run(image, grid_json, output), (1, 1))
             workbook = load_workbook(output, read_only=True, data_only=False)
             try:
                 self.assertEqual(workbook["待核对表格"]["A1"].value, "00042")
                 self.assertEqual(workbook["待核对表格"]["A1"].data_type, "s")
                 self.assertEqual(workbook["逐格复核"]["E2"].value, "待人工核对原图")
+                details=list(workbook["识别片段明细"].values)
+                self.assertEqual(details[1][0:6], (1,1,1,"已归入网格单元格","00042",0.99))
+                self.assertEqual(details[2][0:6], (2,None,None,"未归属","跨界文字",0.61))
+                self.assertEqual(workbook["未归属片段"]["A2"].value, 2)
+                self.assertEqual(workbook["未归属片段"]["C2"].value, 0.61)
+                self.assertIn("模型分数只作参考",workbook["说明"]["B6"].value)
             finally:
                 workbook.close()
             before = output.read_bytes()
