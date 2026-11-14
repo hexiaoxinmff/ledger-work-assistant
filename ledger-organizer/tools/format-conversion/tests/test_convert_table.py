@@ -63,7 +63,7 @@ class ConvertTable(unittest.TestCase):
    self.assertFalse(out.exists())
 
  def test_formula_guard_checks_prefix_after_leading_whitespace(self):
-  dangerous=[' =1+1','  +SUM(A1)','\\t@SUM(A1)','\\n＝1+1','  －cmd']
+  dangerous=[' =1+1','  +SUM(A1)','\t@SUM(A1)','\n＝1+1','  －cmd']
   for value in dangerous:
    with self.subTest(value=value),tempfile.TemporaryDirectory() as tmp:
     d=Path(tmp);source=d/'source.xlsx';output=d/'output.csv'
