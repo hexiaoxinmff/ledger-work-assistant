@@ -1,5 +1,5 @@
 """Extract simple text-only DOCX tables to a traceable XLSX; no OCR."""
-import argparse, hashlib, os, zipfile
+import argparse, hashlib, os, tempfile, zipfile
 from xml.etree import ElementTree as ET
 from openpyxl import Workbook, load_workbook
 
