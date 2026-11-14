@@ -162,7 +162,7 @@ class GridOutputSafety(unittest.TestCase):
             directory = Path(temporary)
             image, ocr, grid_json, output = self.fixtures(directory)
             self.map_fake(image, ocr, grid_json)
-            self.assertEqual(EXPORT.run(image, grid_json, output), (1, 0))
+            self.assertEqual(EXPORT.run(image, grid_json, output), (1, 1))
             workbook = load_workbook(output, read_only=True, data_only=False)
             try:
                 self.assertEqual(workbook["待核对表格"]["A1"].value, "00042")
