@@ -24,6 +24,7 @@ class SpecialContent(unittest.TestCase):
                 document(source,'<w:tbl><w:tr><w:tc><w:p>'+special+'<w:r><w:t>100</w:t></w:r></w:p></w:tc></w:tr></w:tbl>')
                 with self.assertRaisesRegex(ValueError,'特殊内容'):converter.run(source,output)
                 self.assertFalse(output.exists())
+                self.assertEqual(list(Path(temporary).glob('.ledger-docx-*')),[])
 
     def test_wrapped_table_and_plain_text(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -38,7 +39,8 @@ class SpecialContent(unittest.TestCase):
             try:
                 self.assertEqual(workbook['表格1']['A1'].value,'001234567890123456789')
                 self.assertEqual(workbook['表格1']['A1'].data_type,'s')
-           
+            finally:workbook.close()
+
     def test_failed_conversion_never_publishes_unverified_output(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory=Path(temporary);source=directory/'source.docx';output=directory/'output.xlsx'
