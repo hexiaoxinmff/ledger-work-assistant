@@ -1,5 +1,5 @@
 """Experimental grid-cell mapping for ONE simple straight-line table image."""
-import argparse, hashlib, json, math
+import argparse, hashlib, json, math, os, tempfile
 from pathlib import Path
 import cv2
 import numpy as np
@@ -56,7 +56,9 @@ def lines(img):
 def map_table(image, ocrfile, output):
     image=Path(image).resolve();ocrfile=Path(ocrfile).resolve();output=Path(output).resolve()
     if len({str(image),str(ocrfile),str(output)})<3 or output.suffix.lower()!='.json':raise ValueError('输入输出必须是不同文件，输出为 JSON')
-    imagehash=sha(image); ocrhash=sha(ocrfile); raw=json.loads(ocrfile.read_text(encoding='utf8'))
+    if not output.parent.is_dir():raise FileNotFoundError(f'输出目录不存在：{output.parent}')
+    if os.path.lexists(output):raise FileExistsError(output)
+    imagehash=sha(image);ocrhash=sha(ocrfile);raw=json.loads(ocrfile.read_text(encoding='utf8'))
     if raw.get('来源sha256')!=imagehash or not isinstance(raw.get('结果'),list):raise ValueError('OCR 结果与原图哈希不一致或格式无效')
     arr=np.fromfile(str(image),dtype=np.uint8);img=cv2.imdecode(arr,cv2.IMREAD_COLOR)
     if img is None:raise ValueError('无法读取图片')
@@ -71,7 +73,6 @@ def map_table(image, ocrfile, output):
             bx=[float(p[0]) for p in box];by=[float(p[1]) for p in box]
         except (TypeError,ValueError,IndexError):raise ValueError('OCR 坐标无效')
         if not all(math.isfinite(v) for v in bx+by):raise ValueError('OCR 坐标无效')
-        # Entire polygon bounding box must sit strictly within a single cell.
         matches=[c for c in cells if min(bx)>c['边界_像素'][0] and max(bx)<c['边界_像素'][2] and min(by)>c['边界_像素'][1] and max(by)<c['边界_像素'][3]]
         fragment={'识别文本':text,'位置_像素':box,'复核状态':'待人工核对原图'}
         if len(matches)==1:matches[0]['片段'].append(fragment)
@@ -79,11 +80,21 @@ def map_table(image, ocrfile, output):
     for c in cells:
         c['片段'].sort(key=lambda q:(min(v[1] for v in q['位置_像素']),min(v[0] for v in q['位置_像素'])))
         c['识别文本']=' '.join(x['识别文本'] for x in c['片段'])
-    if sha(image)!=imagehash or sha(ocrfile)!=ocrhash:raise ValueError('输入文件在处理期间发生变化')
     data={'用途':'仅虚构样例，自动网格及所有识别结果均须人工复核；空白格不代表原图为空',
           '来源文件名':image.name,'来源sha256':imagehash,'OCR结果sha256':ocrhash,
           '行数':len(ys)-1,'列数':len(xs)-1,'单元格':cells,'未归属片段':unassigned}
-    with open(output,'x',encoding='utf8') as f:json.dump(data,f,ensure_ascii=False,indent=2)
+    if sha(image)!=imagehash or sha(ocrfile)!=ocrhash:raise ValueError('输入文件在处理期间发生变化')
+    fd,temporary=tempfile.mkstemp(prefix='.ledger-grid-',suffix='.json.tmp',dir=output.parent)
+    try:
+        with os.fdopen(fd,'w',encoding='utf8') as stream:
+            json.dump(data,stream,ensure_ascii=False,indent=2)
+            stream.flush();os.fsync(stream.fileno())
+        with open(temporary,encoding='utf8') as stream:
+            if json.load(stream)!=data:raise ValueError('网格 JSON 暂存结果回读不一致')
+        if sha(image)!=imagehash or sha(ocrfile)!=ocrhash:raise ValueError('输入文件在处理期间发生变化')
+        os.link(temporary,output)
+    finally:
+        if os.path.exists(temporary):os.unlink(temporary)
     return len(cells),len(unassigned)
 
 if __name__=='__main__':
