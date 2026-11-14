@@ -37,6 +37,6 @@ CSV 字节本身不保存单元格类型；即使文件里保留了完整长编�
 CSV/XLSX 互转先在输出同目录生成 `.ledger-conversion-` 临时文件，并在临时文件上回读、比对转换内容和输入哈希；全部通过才借助硬链接创建最终路径。若最终文件已存在或目录不支持硬链接，程序停止且不覆盖已有文件。临时文件含转换结果，可能含敏感内容；进程异常或系统中断后应由使用者确认并按资料保护要求清理。已在本机虚构样例验证模拟写入失败、回读失败、输入变化及双进程同路径竞争；网络盘、断电和真实资料没有验证。
 
 
-## CSV 公式前缀防护候选修订
+## v0.39 CSV 公式前缀防护
 
-XLSX → CSV 对可能被电子表格解释为公式的文本采取拒绝导出策略。候选修订补充拦截以换行符和全角 `＝`、`＋`、`－`、`＠` 开头的值；普通 ASCII 负数如 `-12.00` 仍可导出。公式防护依赖具体表格软件行为，目标环境还需实测；该候选修改尚未在本机执行回归或验证 Excel/LibreOffice 的打开与重存行为。依据 OWASP CSV Injection 指引中的前缀清单，详见 https://owasp.org/www-community/attacks/CSV_Injection 。
+XLSX → CSV 对可能被电子表格解释为公式的文本采取拒绝导出策略。除 ASCII =、+、@、制表符、回车和非数值的 - 前缀外，也拒绝以换行符和全角 ＝、＋、－、＠ 开头的值；普通 ASCII 负数如 -12.00 仍可导出。虚构回归在 Python 3.12 的 GitHub Actions Ubuntu 和 Windows runner 上通过；未验证 Excel/LibreOffice GUI 打开、另存后的行为，也未使用真实账目测试。来源参考：OWASP CSV Injection（https://owasp.org/www-community/attacks/CSV_Injection）。
