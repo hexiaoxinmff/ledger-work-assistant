@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import sys
 
 import pypdfium2 as pdfium
 from openpyxl import Workbook, load_workbook
@@ -17,9 +18,9 @@ MAX_PAGES = 200
 MAX_TOTAL_CHARS = 500_000
 TEXT_CHUNK = 30_000
 NUMBER = re.compile(
-    r"(?<![\w.])(?:\(\s*\d[\d,]*(?:\.\d+)?\s*\)|"
+    r"(?<![\w.,])(?:\(\s*\d[\d,]*(?:\.\d+)?\s*\)|"
     r"[+\-−－]?\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?|"
-    r"[+\-−－]?\s*\d+(?:\.\d+)?)(?:%|％)?"
+    r"[+\-−－]?\s*\d+(?:\.\d+)?)(?:%|％)?(?![\w.,])"
 )
 
 
@@ -29,6 +30,11 @@ def sha256(path):
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _normalize_line_endings(value):
+    """Use LF consistently because XLSX/XML readers normalize literal CR characters."""
+    return value.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _safe_text(value):
@@ -102,7 +108,7 @@ def _extract(pdf_path):
             text_page = None
             try:
                 text_page = page.get_textpage()
-                text = _safe_text(text_page.get_text_bounded())
+                text = _safe_text(_normalize_line_endings(text_page.get_text_bounded()))
                 candidates = []
                 for match in NUMBER.finditer(text):
                     start, end = match.span()
@@ -203,7 +209,27 @@ def _verify_workbook(path, expected_rows):
         for sheet_name, expected in zip(("页码状态", "页面原文", "数字候选", "运行说明"), expected_rows):
             actual = [list(row) for row in workbook[sheet_name].iter_rows(values_only=True)]
             if actual != expected:
-                raise ValueError(f"输出回读不一致：{sheet_name}")
+                first_difference = next(
+                    (
+                        (row_index, column_index, expected_value, actual_value)
+                        for row_index, (expected_row, actual_row) in enumerate(zip(expected, actual), 1)
+                        for column_index, (expected_value, actual_value) in enumerate(zip(expected_row, actual_row), 1)
+                        if expected_value != actual_value
+                    ),
+                    None,
+                )
+                if first_difference is None:
+                    detail = f"expected_rows={len(expected)}, actual_rows={len(actual)}"
+                else:
+                    row_index, column_index, expected_value, actual_value = first_difference
+                    detail = (
+                        f"row={row_index}, column={column_index}, "
+                        f"expected_type={type(expected_value).__name__}, "
+                        f"actual_type={type(actual_value).__name__}, "
+                        f"expected_length={len(expected_value) if isinstance(expected_value, str) else 'n/a'}, "
+                        f"actual_length={len(actual_value) if isinstance(actual_value, str) else 'n/a'}"
+                    )
+                raise ValueError(f"输出回读不一致：{sheet_name}（{detail}）")
             if any(cell.data_type == "f" for row in workbook[sheet_name].iter_rows() for cell in row):
                 raise ValueError(f"输出含公式：{sheet_name}")
     finally:
@@ -255,4 +281,6 @@ if __name__ == "__main__":
     parser.add_argument("output", help="新建 XLSX 路径；不覆盖现有文件")
     args = parser.parse_args()
     import json
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="strict")
     print(json.dumps(run(args.source, args.output), ensure_ascii=False, indent=2))
