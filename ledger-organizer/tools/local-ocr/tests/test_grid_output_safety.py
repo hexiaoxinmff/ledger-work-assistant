@@ -46,6 +46,11 @@ class GridOutputSafety(unittest.TestCase):
             "结果": [{
                 "识别文本": "00042",
                 "位置_像素": [[20, 20], [30, 20], [30, 30], [20, 30]],
+                "模型分数": 0.99,
+            }, {
+                "识别文本": "跨界文字",
+                "位置_像素": [[95, 20], [105, 20], [105, 30], [95, 30]],
+                "模型分数": 0.61,
             }],
         }
         ocr.write_text(json.dumps(ocr_data, ensure_ascii=False), encoding="utf8")
@@ -61,12 +66,17 @@ class GridOutputSafety(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             image, ocr, grid_json, _ = self.fixtures(directory)
-            self.assertEqual(self.map_fake(image, ocr, grid_json), (1, 0))
+            self.assertEqual(self.map_fake(image, ocr, grid_json), (1, 1))
             data = json.loads(grid_json.read_text(encoding="utf8"))
             self.assertEqual(data["来源sha256"], sha(image))
             self.assertEqual(data["OCR结果sha256"], sha(ocr))
             self.assertEqual(data["单元格"][0]["识别文本"], "00042")
             self.assertEqual(data["单元格"][0]["复核状态"], "待人工核对原图")
+            self.assertEqual(data["OCR识别条数"], 2)
+            self.assertEqual(data["单元格"][0]["片段"][0]["OCR结果序号"], 1)
+            self.assertEqual(data["单元格"][0]["片段"][0]["模型分数"], 0.99)
+            self.assertEqual(data["未归属片段"][0]["OCR结果序号"], 2)
+            self.assertEqual(data["未归属片段"][0]["模型分数"], 0.61)
             self.assertEqual(list(directory.glob(".ledger-grid-*")), [])
 
     def test_grid_json_failures_never_publish_or_overwrite(self):
@@ -158,6 +168,12 @@ class GridOutputSafety(unittest.TestCase):
                 self.assertEqual(workbook["待核对表格"]["A1"].value, "00042")
                 self.assertEqual(workbook["待核对表格"]["A1"].data_type, "s")
                 self.assertEqual(workbook["逐格复核"]["E2"].value, "待人工核对原图")
+                details=list(workbook["识别片段明细"].values)
+                self.assertEqual(details[1][0:6], (1,1,1,"已归入网格单元格","00042",0.99))
+                self.assertEqual(details[2][0:6], (2,None,None,"未归属","跨界文字",0.61))
+                self.assertEqual(workbook["未归属片段"]["A2"].value, 2)
+                self.assertEqual(workbook["未归属片段"]["C2"].value, 0.61)
+                self.assertIn("模型分数只作参考",workbook["说明"]["B6"].value)
             finally:
                 workbook.close()
             before = output.read_bytes()
