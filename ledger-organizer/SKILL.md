@@ -3,7 +3,7 @@ name: ledger-organizer
 description: 根据当前平台能力转换文档、表格、PDF 和图片格式，整理用户提供的费用、收款或欠费台账，按确认的字段和规则形成可追溯的结果与待核实清单；不代替财务审核、入账或开票。
 ---
 
-# 费用与收款台账整理助手 v0.45
+# 费用与收款台账整理助手 v0.46
 
 ## 范围与能力
 需要验证下载包的脚本时，可运行 `python tools/run_checks.py` 执行基础虚构回归；`--suite ledger` 执行对账业务规则回归（需预装 pandas、openpyxl、PyYAML）；`--suite pdf-text` 执行 PDF 文字层转 Excel 回归（需预装 pypdfium2、openpyxl）；`--suite ocr` 单测 OCR 相关结构/复核；`--suite all` 执行全部组。报告列出实际解释器、每组输出、失败/超时及未运行组；不安装依赖。仅对选择且实际执行的组报告通过，不能代替目标平台或真实业务验收。
@@ -138,3 +138,8 @@ XLSX 导出 CSV 时，若文本以换行符或全角公式前缀 ＝、＋、－
 ## v0.45 PDF 数字候选词项边界
 
 PDF 文字层提取的数字候选现在要求前后均为完整词项边界，避免从字母数字混排、点号链或异常千分位串中截取部分数字。候选仍只是供人工定位复核，不构成数字格式纠错或完整性证明。PDFium 的 CR/CRLF 行分隔统一为 LF 后再导出，字符偏移对应规范化文本；详见 `references/document-to-excel.md`。
+
+
+## v0.46 CSV 前导空白公式拦截
+
+XLSX 导出 CSV 时，检查去除前导空白后的公式前缀；疑似内容停止导出，不自动改写原文。详见 `references/format-conversion.md`。该回归不替代用户在目标表格软件中的打开检查。
