@@ -10,6 +10,8 @@ permissions:
 
 jobs:
   conversion-tests:
+    env:
+      PYTHONUTF8: "1"
     name: Python 3.12 / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
