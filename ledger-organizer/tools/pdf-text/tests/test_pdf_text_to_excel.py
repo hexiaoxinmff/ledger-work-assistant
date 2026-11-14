@@ -51,6 +51,15 @@ def make_pdf(path, page_streams):
 
 
 class PdfTextToExcel(unittest.TestCase):
+    def test_number_candidates_require_complete_token_boundaries(self):
+        valid = "ID 001234567890123456789 Amount 1,234.56 Balance (88.00) Rate 12% signed −45.60"
+        self.assertEqual(
+            [match.group(0) for match in module.NUMBER.finditer(valid)],
+            ["001234567890123456789", "1,234.56", "(88.00)", "12%", "−45.60"],
+        )
+        malformed = "Code 123ABC Version 1.2.3 Group 1,23 Group 1234,567 Underscore 12_34"
+        self.assertEqual(list(module.NUMBER.finditer(malformed)), [])
+
     def test_uncertain_text_search_never_emits_coordinates(self):
         class Searcher:
             def __init__(self, matches):
