@@ -1,0 +1,171 @@
+"""Synthetic output-safety tests for the grid JSON and review workbook."""
+import hashlib
+import importlib.util
+import json
+import sys
+import tempfile
+import types
+import unittest
+from pathlib import Path
+from unittest import mock
+
+HERE = Path(__file__).resolve().parents[1]
+
+
+def load_with_fake_vision_modules():
+    fake_cv2 = types.ModuleType("cv2")
+    fake_cv2.IMREAD_COLOR = 1
+    fake_cv2.imdecode = lambda encoded, mode: object()
+    fake_numpy = types.ModuleType("numpy")
+    fake_numpy.uint8 = object()
+    fake_numpy.fromfile = lambda path, dtype=None: object()
+    spec = importlib.util.spec_from_file_location("table_grid_under_test", HERE / "table_grid.py")
+    module = importlib.util.module_from_spec(spec)
+    with mock.patch.dict(sys.modules, {"cv2": fake_cv2, "numpy": fake_numpy}):
+        spec.loader.exec_module(module)
+    return module
+
+
+GRID = load_with_fake_vision_modules()
+SPEC = importlib.util.spec_from_file_location("export_review_under_test", HERE / "export_review.py")
+EXPORT = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(EXPORT)
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+class GridOutputSafety(unittest.TestCase):
+    def fixtures(self, directory):
+        image = directory / "synthetic.png"
+        image.write_bytes(b"synthetic image bytes")
+        ocr = directory / "synthetic-ocr.json"
+        ocr_data = {
+            "来源sha256": sha(image),
+            "结果": [{
+                "识别文本": "00042",
+                "位置_像素": [[20, 20], [30, 20], [30, 30], [20, 30]],
+            }],
+        }
+        ocr.write_text(json.dumps(ocr_data, ensure_ascii=False), encoding="utf8")
+        grid_json = directory / "grid.json"
+        review_xlsx = directory / "review.xlsx"
+        return image, ocr, grid_json, review_xlsx
+
+    def map_fake(self, image, ocr, output):
+        with mock.patch.object(GRID, "lines", return_value=([10, 100], [10, 100])):
+            return GRID.map_table(image, ocr, output)
+
+    def test_grid_json_is_staged_verified_and_pending(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            image, ocr, grid_json, _ = self.fixtures(directory)
+            self.assertEqual(self.map_fake(image, ocr, grid_json), (1, 0))
+            data = json.loads(grid_json.read_text(encoding="utf8"))
+            self.assertEqual(data["来源sha256"], sha(image))
+            self.assertEqual(data["OCR结果sha256"], sha(ocr))
+            self.assertEqual(data["单元格"][0]["识别文本"], "00042")
+            self.assertEqual(data["单元格"][0]["复核状态"], "待人工核对原图")
+            self.assertEqual(list(directory.glob(".ledger-grid-*")), [])
+
+    def test_grid_json_failures_never_publish_or_overwrite(self):
+        for failure in ("write", "readback", "source changed", "race"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                image, ocr, output, _ = self.fixtures(directory)
+                kwargs = {"return_value": ([10, 100], [10, 100])}
+                with mock.patch.object(GRID, "lines", **kwargs):
+                    if failure == "write":
+                        context = mock.patch.object(GRID.json, "dump", side_effect=OSError("synthetic write failure"))
+                        expected, exception = "synthetic write failure", OSError
+                    elif failure == "readback":
+                        context = mock.patch.object(GRID.json, "load", side_effect=ValueError("synthetic readback failure"))
+                        expected, exception = "synthetic readback failure", ValueError
+                    elif failure == "source changed":
+                        real_sha = GRID.sha
+                        image_checks = []
+                        def changed(path):
+                            if Path(path).resolve() == image.resolve():
+                                image_checks.append(True)
+                                if len(image_checks) == 3:
+                                    return "changed"
+                            return real_sha(path)
+                        context = mock.patch.object(GRID, "sha", side_effect=changed)
+                        expected, exception = "输入文件在处理期间发生变化", ValueError
+                    else:
+                        real_link = GRID.os.link
+                        def competing_writer(staged, destination):
+                            Path(destination).write_bytes(b"other writer")
+                            return real_link(staged, destination)
+                        context = mock.patch.object(GRID.os, "link", side_effect=competing_writer)
+                        expected, exception = "", FileExistsError
+                    with context, self.assertRaisesRegex(exception, expected):
+                        GRID.map_table(image, ocr, output)
+                if failure == "race":
+                    self.assertEqual(output.read_bytes(), b"other writer")
+                else:
+                    self.assertFalse(output.exists())
+                self.assertEqual(list(directory.glob(".ledger-grid-*")), [])
+
+    def test_review_workbook_failure_does_not_publish_or_overwrite(self):
+        for failure in ("write", "readback", "source changed", "race"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                image, ocr, grid_json, output = self.fixtures(directory)
+                self.map_fake(image, ocr, grid_json)
+                if failure == "write":
+                    context = mock.patch.object(EXPORT.Workbook, "save", side_effect=OSError("synthetic write failure"))
+                    expected, exception = "synthetic write failure", OSError
+                elif failure == "readback":
+                    context = mock.patch.object(EXPORT, "load_workbook", side_effect=ValueError("synthetic readback failure"))
+                    expected, exception = "synthetic readback failure", ValueError
+                elif failure == "source changed":
+                    real_sha = EXPORT.sha
+                    image_checks = []
+                    def changed(path):
+                        if Path(path).resolve() == image.resolve():
+                            image_checks.append(True)
+                            if len(image_checks) == 3:
+                                return "changed"
+                        return real_sha(path)
+                    context = mock.patch.object(EXPORT, "sha", side_effect=changed)
+                    expected, exception = "源文件在处理期间变化", ValueError
+                else:
+                    real_link = EXPORT.os.link
+                    def competing_writer(staged, destination):
+                        Path(destination).write_bytes(b"other writer")
+                        return real_link(staged, destination)
+                    context = mock.patch.object(EXPORT.os, "link", side_effect=competing_writer)
+                    expected, exception = "", FileExistsError
+                with context, self.assertRaisesRegex(exception, expected):
+                    EXPORT.run(image, grid_json, output)
+                if failure == "race":
+                    self.assertEqual(output.read_bytes(), b"other writer")
+                else:
+                    self.assertFalse(output.exists())
+                self.assertEqual(list(directory.glob(".ledger-grid-review-*")), [])
+
+    def test_review_workbook_success_and_existing_output(self):
+        from openpyxl import load_workbook
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            image, ocr, grid_json, output = self.fixtures(directory)
+            self.map_fake(image, ocr, grid_json)
+            self.assertEqual(EXPORT.run(image, grid_json, output), (1, 0))
+            workbook = load_workbook(output, read_only=True, data_only=False)
+            try:
+                self.assertEqual(workbook["待核对表格"]["A1"].value, "00042")
+                self.assertEqual(workbook["待核对表格"]["A1"].data_type, "s")
+                self.assertEqual(workbook["逐格复核"]["E2"].value, "待人工核对原图")
+            finally:
+                workbook.close()
+            before = output.read_bytes()
+            with self.assertRaises(FileExistsError):
+                EXPORT.run(image, grid_json, output)
+            self.assertEqual(output.read_bytes(), before)
+            self.assertEqual(list(directory.glob(".ledger-grid-review-*")), [])
+
+
+if __name__ == "__main__":
+    unittest.main()
