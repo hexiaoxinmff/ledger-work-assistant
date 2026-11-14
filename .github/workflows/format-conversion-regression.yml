@@ -3,7 +3,11 @@ name: Format conversion regression
 on:
   push:
     branches:
-      - codex/csv-formula-guard
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
