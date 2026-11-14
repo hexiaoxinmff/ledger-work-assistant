@@ -30,6 +30,11 @@ def evaluate(expected_data, actual_data):
         raise ValueError("真值文件必须包含非空 cases 列表")
     if not isinstance(results, list):
         raise ValueError("OCR 文件必须包含 结果 列表")
+    for item in results:
+        if not isinstance(item, dict) or not isinstance(item.get("识别文本"), str):
+            raise ValueError("OCR 结果项格式无效")
+        if item.get("复核状态") != PENDING:
+            raise ValueError("所有 OCR 结果必须保留待人工复核状态")
 
     case_ids = set()
     indexes = set()
