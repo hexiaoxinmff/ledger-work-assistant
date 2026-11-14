@@ -1,0 +1,32 @@
+name: OCR field evaluator regression
+
+on:
+  push:
+    branches:
+      - main
+      - codex/ocr-field-evaluator
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluator-tests:
+    name: Python 3.12 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run OCR evaluator regression tests
+        run: python -m unittest discover -s ledger-organizer/tools/local-ocr/tests -p test_evaluate_accuracy.py -v
