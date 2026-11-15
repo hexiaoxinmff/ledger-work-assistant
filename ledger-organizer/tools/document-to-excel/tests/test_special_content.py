@@ -57,7 +57,7 @@ class SpecialContent(unittest.TestCase):
                 audit = list(workbook["数字复核"].values)[1:]
                 self.assertEqual([row[3] for row in audit], rows[:2])
                 self.assertTrue(all(row[4] == "待人工复核" for row in audit))
-                self.assertEqual([row[0] for row in workbook["表格1"].iter_rows(min_col=1, max_col=1, values_only=True)][1:], rows)
+                self.assertEqual([row[0] for row in workbook["表格1"].iter_rows(min_col=1, max_col=1, values_only=True)], rows)
             finally:
                 workbook.close()
 
