@@ -96,6 +96,27 @@ class ImageOutputSafety(unittest.TestCase):
             self.assertEqual(data["结果"][0]["复核状态"], "待人工核对原图")
             self.assertEqual(list(directory.glob(".ledger-ocr-*")), [])
 
+    def test_invalid_scores_and_boxes_are_rejected_before_publication(self):
+        valid_box = [[0, 0], [1, 0], [1, 1], [0, 1]]
+        cases = [
+            ("nan score", valid_box, float("nan"), "模型分数必须为 0 至 1 的有限数"),
+            ("infinite score", valid_box, float("inf"), "模型分数必须为 0 至 1 的有限数"),
+            ("out of range score", valid_box, 1.01, "模型分数必须为 0 至 1 的有限数"),
+            ("boolean score", valid_box, True, "模型分数必须为 0 至 1 的有限数"),
+            ("non-finite coordinate", [[0, 0], [1, 0], [1, float("nan")], [0, 1]], 0.99, "边界框坐标必须为有限数"),
+            ("wrong corner count", [[0, 0], [1, 0], [1, 1]], 0.99, "必须包含四个角点"),
+        ]
+        for label, box, score, message in cases:
+            with self.subTest(case=label), tempfile.TemporaryDirectory() as temporary:
+                source, output = self.fixture(Path(temporary))
+                result = SimpleNamespace(txts=["00042"], boxes=[box], scores=[score])
+                with mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}), \\
+                     mock.patch.object(MODULE, "_recognize_without_python_socket_access", return_value=result):
+                    with self.assertRaisesRegex(ValueError, message):
+                        MODULE.run(source, output)
+                self.assertFalse(output.exists())
+                self.assertEqual(list(Path(temporary).glob(".ledger-ocr-*")), [])
+
     def test_write_and_readback_failures_leave_no_final_or_temporary_file(self):
         for failure in ("write", "readback"):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
