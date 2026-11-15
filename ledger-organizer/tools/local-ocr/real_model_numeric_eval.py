@@ -33,86 +33,12 @@ CASES = [
     {"id": "negative-downsample-half", "suite": "image-variation", "condition": "downsampled to half dimensions", "field_type": "amount", "expected": "-1,234.56", "render": {"downsample_factor": 0.5}},
     {"id": "negative-light-blur", "suite": "image-variation", "condition": "Gaussian blur radius 0.8 px", "field_type": "amount", "expected": "-1,234.56", "render": {"blur_radius": 0.8}},
     {"id": "positive-small-control", "suite": "image-variation", "condition": "positive amount at font size 80 px", "field_type": "amount", "expected": "1,234.56", "render": {"font_size": 80}},
-    [
-        {
-            "id": "negative-low-contrast-preprocess-original",
-            "suite": "preprocess",
-            "condition": "gray text 150 on gray background 245; original",
-            "field_type": "amount",
-            "expected": "-1,234.56",
-            "render": {
-                "foreground_level": 150,
-                "background_level": 245
-            },
-            "preprocess_variant": "original",
-            "preprocess_base_case": "negative-low-contrast"
-        },
-        {
-            "id": "negative-low-contrast-preprocess-autocontrast",
-            "suite": "preprocess",
-            "condition": "gray text 150 on gray background 245; autocontrast",
-            "field_type": "amount",
-            "expected": "-1,234.56",
-            "render": {
-                "foreground_level": 150,
-                "background_level": 245
-            },
-            "preprocess_variant": "autocontrast",
-            "preprocess_base_case": "negative-low-contrast"
-        },
-        {
-            "id": "negative-low-contrast-preprocess-threshold-198",
-            "suite": "preprocess",
-            "condition": "gray text 150 on gray background 245; threshold-198",
-            "field_type": "amount",
-            "expected": "-1,234.56",
-            "render": {
-                "foreground_level": 150,
-                "background_level": 245
-            },
-            "preprocess_variant": "threshold-198",
-            "preprocess_base_case": "negative-low-contrast"
-        },
-        {
-            "id": "negative-jpeg-q40-preprocess-original",
-            "suite": "preprocess",
-            "condition": "JPEG quality 40; original",
-            "field_type": "amount",
-            "expected": "-1,234.56",
-            "render": {
-                "format": "JPEG",
-                "jpeg_quality": 40
-            },
-            "preprocess_variant": "original",
-            "preprocess_base_case": "negative-jpeg-q40"
-        },
-        {
-            "id": "negative-jpeg-q40-preprocess-autocontrast",
-            "suite": "preprocess",
-            "condition": "JPEG quality 40; autocontrast",
-            "field_type": "amount",
-            "expected": "-1,234.56",
-            "render": {
-                "format": "JPEG",
-                "jpeg_quality": 40
-            },
-            "preprocess_variant": "autocontrast",
-            "preprocess_base_case": "negative-jpeg-q40"
-        },
-        {
-            "id": "negative-jpeg-q40-preprocess-threshold-198",
-            "suite": "preprocess",
-            "condition": "JPEG quality 40; threshold-198",
-            "field_type": "amount",
-            "expected": "-1,234.56",
-            "render": {
-                "format": "JPEG",
-                "jpeg_quality": 40
-            },
-            "preprocess_variant": "threshold-198",
-            "preprocess_base_case": "negative-jpeg-q40"
-        }
-    ]
+    {"id":"negative-low-contrast-preprocess-original","suite":"preprocess","condition":"gray text 150 on gray background 245; original","field_type":"amount","expected":"-1,234.56","render":{"foreground_level":150,"background_level":245},"preprocess_variant":"original","preprocess_base_case":"negative-low-contrast"},
+    {"id":"negative-low-contrast-preprocess-autocontrast","suite":"preprocess","condition":"gray text 150 on gray background 245; autocontrast","field_type":"amount","expected":"-1,234.56","render":{"foreground_level":150,"background_level":245},"preprocess_variant":"autocontrast","preprocess_base_case":"negative-low-contrast"},
+    {"id":"negative-low-contrast-preprocess-threshold-198","suite":"preprocess","condition":"gray text 150 on gray background 245; threshold-198","field_type":"amount","expected":"-1,234.56","render":{"foreground_level":150,"background_level":245},"preprocess_variant":"threshold-198","preprocess_base_case":"negative-low-contrast"},
+    {"id":"negative-jpeg-q40-preprocess-original","suite":"preprocess","condition":"JPEG quality 40; original","field_type":"amount","expected":"-1,234.56","render":{"format":"JPEG","jpeg_quality":40},"preprocess_variant":"original","preprocess_base_case":"negative-jpeg-q40"},
+    {"id":"negative-jpeg-q40-preprocess-autocontrast","suite":"preprocess","condition":"JPEG quality 40; autocontrast","field_type":"amount","expected":"-1,234.56","render":{"format":"JPEG","jpeg_quality":40},"preprocess_variant":"autocontrast","preprocess_base_case":"negative-jpeg-q40"},
+    {"id":"negative-jpeg-q40-preprocess-threshold-198","suite":"preprocess","condition":"JPEG quality 40; threshold-198","field_type":"amount","expected":"-1,234.56","render":{"format":"JPEG","jpeg_quality":40},"preprocess_variant":"threshold-198","preprocess_base_case":"negative-jpeg-q40"}
 ]
 
 
