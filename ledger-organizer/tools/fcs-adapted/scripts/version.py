@@ -1,5 +1,5 @@
 """Version identifiers for this wrapper and the adapted upstream baseline."""
 
-SKILL_VERSION = "0.79"
-ADAPTER_VERSION = "0.25"
+SKILL_VERSION = "0.80"
+ADAPTER_VERSION = "0.26"
 UPSTREAM_BASE_VERSION = "0.3.0"
