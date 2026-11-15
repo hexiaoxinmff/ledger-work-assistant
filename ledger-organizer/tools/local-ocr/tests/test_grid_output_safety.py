@@ -65,6 +65,57 @@ class GridOutputSafety(unittest.TestCase):
         with mock.patch.object(GRID, "lines", return_value=([10, 100], [10, 100])):
             return GRID.map_table(image, ocr, output)
 
+    def test_split_negative_fragments_remain_separate_in_pending_review(self):
+        from openpyxl import load_workbook
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            image, ocr, grid_json, review_xlsx = self.fixtures(directory)
+            ocr.write_text(json.dumps({
+                "来源sha256": sha(image),
+                "识别条数": 2,
+                "识别状态": "已检出文字候选",
+                "结果": [
+                    {
+                        "识别文本": "1,234.56",
+                        "位置_像素": [[40, 30], [80, 30], [80, 40], [40, 40]],
+                        "模型分数": 0.9,
+                        "复核状态": "待人工核对原图",
+                    },
+                    {
+                        "识别文本": "-1",
+                        "位置_像素": [[20, 30], [35, 30], [35, 40], [20, 40]],
+                        "模型分数": 0.8,
+                        "复核状态": "待人工核对原图",
+                    },
+                ],
+            }, ensure_ascii=False), encoding="utf8")
+
+            self.assertEqual(self.map_fake(image, ocr, grid_json), (1, 0))
+            mapped = json.loads(grid_json.read_text(encoding="utf8"))
+            cell = mapped["单元格"][0]
+            self.assertEqual(cell["识别文本"], "-1 1,234.56")
+            self.assertEqual([fragment["OCR结果序号"] for fragment in cell["片段"]], [2, 1])
+            self.assertEqual(
+                [fragment["识别文本"] for fragment in cell["片段"]],
+                ["-1", "1,234.56"],
+            )
+            self.assertTrue(all(
+                fragment["复核状态"] == "待人工核对原图" for fragment in cell["片段"]
+            ))
+
+            self.assertEqual(EXPORT.run(image, grid_json, review_xlsx), (1, 0))
+            workbook = load_workbook(review_xlsx, read_only=True, data_only=False)
+            try:
+                self.assertEqual(workbook["待核对表格"]["A1"].value, "-1 1,234.56")
+                self.assertEqual(workbook["逐格复核"]["C2"].value, "-1 1,234.56")
+                self.assertEqual(workbook["逐格复核"]["E2"].value, "待人工核对原图")
+                details = list(workbook["识别片段明细"].values)[1:]
+                self.assertEqual([row[0] for row in details], [1, 2])
+                self.assertEqual([row[4] for row in details], ["1,234.56", "-1"])
+                self.assertTrue(all(row[7] == "待人工核对原图" for row in details))
+            finally:
+                workbook.close()
+
     def test_grid_json_is_staged_verified_and_pending(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
