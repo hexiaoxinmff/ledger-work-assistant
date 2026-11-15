@@ -244,6 +244,11 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
                         raise ValueError('存在可能被电子表格执行的文本（含前导空白后的公式前缀），需人工处理')
                     line.append(v)
                 rows.append(line)
+            if rows:
+                column_count=max(map(len,rows))
+                if row_count*column_count>1000000:
+                    raise ValueError('表格范围过大，请缩小范围（最多 100 万个单元格）')
+                rows=[line+['']*(column_count-len(line)) for line in rows]
         finally:w.close()
     else:raise ValueError('仅支持 CSV/TSV 与 XLSX 互转')
     if expected_columns is not None and rows is not None and any(len(row)!=expected_columns for row in rows):
@@ -254,7 +259,16 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
     fd,tempname=tempfile.mkstemp(prefix='.ledger-conversion-',suffix='.tmp',dir=parent)
     try:
         if dst=='.xlsx':
-            with os.fdopen(fd,'wb') as f:w.save(f)
+            try:
+                with os.fdopen(fd,'wb') as f:w.save(f)
+            except Exception:
+                if csv_to_xlsx:
+                    for worksheet in w.worksheets:
+                        try:worksheet.close()
+                        except Exception:pass
+                    try:w.close()
+                    except Exception:pass
+                raise
             with open(tempname,'rb') as staged:
                 check=load_workbook(staged,read_only=True,data_only=False)
                 try:
