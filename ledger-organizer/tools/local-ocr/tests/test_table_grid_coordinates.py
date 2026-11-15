@@ -42,6 +42,7 @@ class OCRCoordinateValidation(unittest.TestCase):
                 [[-1, 30], [90, 30], [90, 50], [30, 50]],  # outside image
                 [[30, 30], [30, 30], [30, 30], [30, 30]],  # zero area
                 [[30], [90, 30], [90, 50], [30, 50]],  # malformed point
+                [[10 ** 1000, 30], [90, 30], [90, 50], [30, 50]],  # overflows float
             ]
             for index, box in enumerate(invalid_boxes):
                 output = directory / f"bad-{index}.json"
@@ -49,7 +50,19 @@ class OCRCoordinateValidation(unittest.TestCase):
                     "来源sha256": source_hash,
                     "结果": [{"识别文本": "100.00", "位置_像素": box, "模型分数": 0.99}],
                 }, ensure_ascii=False), encoding="utf8")
-                with self.subTest(box=box):
+                with self.subTest(index=index):
+                    with self.assertRaises(ValueError):
+                        grid.map_table(image, ocr, output)
+                    self.assertFalse(output.exists())
+
+            valid_box = [[30, 30], [90, 30], [90, 50], [30, 50]]
+            for index, score in enumerate([True, float("inf"), 10 ** 1000]):
+                output = directory / f"bad-score-{index}.json"
+                ocr.write_text(json.dumps({
+                    "来源sha256": source_hash,
+                    "结果": [{"识别文本": "100.00", "位置_像素": valid_box, "模型分数": score}],
+                }, ensure_ascii=False), encoding="utf8")
+                with self.subTest(score_index=index):
                     with self.assertRaises(ValueError):
                         grid.map_table(image, ocr, output)
                     self.assertFalse(output.exists())
