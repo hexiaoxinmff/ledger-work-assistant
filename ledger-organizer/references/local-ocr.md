@@ -118,3 +118,8 @@ RapidOCR 3.10.0 可对无有效输出返回 `RapidOCROutput()`; 输出结构中�
 ## v0.64 单图 OCR 图片输入边界
 
 运行 recognize_image.py 时，工具先检查实际 PNG/JPEG 图片头、文件大小不超过 100 MiB、像素总数不超过 2500 万；PNG 首块 CRC 与 JPEG 尺寸段须有效，JPEG 图片头扫描最多 1 MiB。检查发生在运行时/模型校验之前，仅用有界头部读取，不解码整图。无效、扩展名不符或超限会停止且不发布 JSON。此检查只降低明显超大输入导致资源耗尽的风险，不能保证所有解码器行为、完整文件完整性或 OCR 准确率。虚构回归会确认超限图片在运行时检查和 OCR 调用前被拦截。
+
+
+## OCR 边界框图像范围
+
+单图识别有检测结果时，使用 RapidOCR 返回的原始处理图像尺寸（包括上游图片加载器执行 EXIF 方向校正后的尺寸）校验每个像素坐标均落在图像边界内；引擎没有返回图像尺寸、坐标越界或数值无效时停止发布 JSON，不裁剪或修正坐标。零检测结果不要求边界框尺寸。此校验仅防止无效位置进入后续网格映射，不证明 OCR 文字正确或位置准确。回归使用虚构图像和伪引擎，不运行真实 OCR。上游依据：RapidOCR v3.10.0 的 [图片加载器](https://github.com/RapidAI/RapidOCR/blob/v3.10.0/python/rapidocr/utils/load_image.py)对文件输入执行 EXIF 方向校正，并在 [输出构造](https://github.com/RapidAI/RapidOCR/blob/v3.10.0/python/rapidocr/main.py)保留处理后的原始图像。
