@@ -24,9 +24,13 @@ def contains_number(text):
             and any(char in CHINESE_NUMBER_UNITS for char in text))
 
 
-def sha(path, max_bytes=MAX_DOCX_BYTES):
+def check_docx_size(path, max_bytes=MAX_DOCX_BYTES):
     if os.path.getsize(path) > max_bytes:
         raise ValueError("DOCX 文件超过 100 MiB 上限")
+
+
+def sha(path, max_bytes=MAX_DOCX_BYTES):
+    check_docx_size(path, max_bytes)
     h = hashlib.sha256()
     total = 0
     with open(path, "rb") as f:
@@ -38,8 +42,7 @@ def sha(path, max_bytes=MAX_DOCX_BYTES):
     return h.hexdigest()
 
 def extract(path):
-    if os.path.getsize(path) > MAX_DOCX_BYTES:
-        raise ValueError("DOCX 文件超过 100 MiB 上限")
+    check_docx_size(path, MAX_DOCX_BYTES)
     with zipfile.ZipFile(path) as z:
         entries = z.infolist()
         if len(entries) > MAX_DOCX_ENTRIES:
@@ -116,6 +119,7 @@ def run(source, output):
     if os.path.lexists(output):
         raise FileExistsError(output)
 
+    check_docx_size(source, MAX_DOCX_BYTES)
     before = sha(source, MAX_DOCX_BYTES)
     rows = extract(source)
     wb = Workbook()
