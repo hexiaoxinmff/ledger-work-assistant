@@ -183,7 +183,7 @@ class ConvertTable(unittest.TestCase):
     for item in original.infolist():
      data=original.read(item.filename)
      if item.filename=='xl/worksheets/sheet1.xml':
-      data=re.sub(rb'<dimension ref="[^"]+"\\s*/>',b'<dimension ref="A1:A1"/>',data)
+      data=re.sub(rb'<dimension ref="[^"]+"\s*/>',b'<dimension ref="A1:A1"/>',data)
      changed.writestr(item,data)
    self.assertEqual(module.run(str(corrupt),str(output),expected_columns=2),2)
    with output.open(encoding='utf-8-sig',newline='') as stream:
