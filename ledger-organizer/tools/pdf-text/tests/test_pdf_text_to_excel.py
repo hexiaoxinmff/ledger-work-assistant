@@ -153,6 +153,20 @@ class PdfTextToExcel(unittest.TestCase):
                 workbook.close()
             self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(), before)
 
+    def test_text_limit_stops_before_numeric_candidate_location(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "oversized-text.pdf"
+            payload = b"BT /F1 12 Tf 72 720 Td (" + b"A" * 50 + b" 123) Tj ET"
+            make_pdf(source, [payload])
+            with patch.object(module, "MAX_TOTAL_CHARS", 10), patch.object(
+                module,
+                "_locate_unique_candidate",
+                side_effect=AssertionError("oversized page must stop before candidate location"),
+            ) as locate:
+                with self.assertRaisesRegex(ValueError, "安全处理上限"):
+                    module._extract(source)
+            locate.assert_not_called()
+
     def test_no_text_stops_and_publishes_nothing(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
