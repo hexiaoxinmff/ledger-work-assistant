@@ -117,7 +117,29 @@ class NumericMeasurement(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(sum(case["suite"] == "baseline" for case in MODULE.CASES), 8)
         self.assertGreaterEqual(sum(case["suite"] == "image-variation" for case in MODULE.CASES), 5)
+        self.assertEqual(sum(case["suite"] == "preprocess" for case in MODULE.CASES), 6)
 
+    def test_preprocessing_variants_use_distinct_images_and_preserve_synthetic_source(self):
+        with patch.object(MODULE, "run", side_effect=fake_run):
+            report = MODULE.evaluate()
+        rows = [row for row in report["cases"] if row["suite"] == "preprocess"]
+        self.assertEqual(len(rows), 6)
+        for base in ("negative-low-contrast", "negative-jpeg-q40"):
+            group = [row for row in rows if row["preprocess_base_case"] == base]
+            self.assertEqual(
+                {row["preprocessing_variant"] for row in group},
+                {"original", "autocontrast", "threshold-198"},
+            )
+            self.assertEqual(len({row["original_source_sha256"] for row in group}), 1)
+            self.assertTrue(all(row["source_unchanged"] for row in group))
+            original = next(row for row in group if row["preprocessing_variant"] == "original")
+            self.assertEqual(original["ocr_input_sha256"], original["original_source_sha256"])
+            for row in group:
+                self.assertTrue(row["review_required"])
+                self.assertTrue(all(
+                    fragment["review_status"] == PENDING
+                    for fragment in row["recognized_fragments"]
+                ))
     def test_report_publish_never_overwrites(self):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "report.json"
