@@ -185,7 +185,7 @@ class GridOutputSafety(unittest.TestCase):
             original_stat = Path.stat
 
             def report_stale_small_size(path, *args, **kwargs):
-                if Path(path).resolve() == ocr.resolve():
+                if Path(path) == ocr:
                     return types.SimpleNamespace(st_size=1)
                 return original_stat(path, *args, **kwargs)
 
