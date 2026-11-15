@@ -45,7 +45,7 @@ class ImageOutputSafety(unittest.TestCase):
             return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", crc)
         ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
         pixels = zlib.compress(b"\x00\x00\x00\x00\x00")
-        return b"\x89PNG\\r\\n\x1a\\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", pixels) + chunk(b"IEND", b"")
+        return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", pixels) + chunk(b"IEND", b"")
 
     def fixture(self, directory):
         source = directory / "synthetic.png"
