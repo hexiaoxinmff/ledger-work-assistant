@@ -52,4 +52,51 @@ class LedgerWorkflow(unittest.TestCase):
             self.assertEqual(hashlib.sha256(output.read_bytes()).hexdigest(),saved)
             self.assertEqual({path:hashlib.sha256(path.read_bytes()).hexdigest() for path in (left,right)},hashes)
 
+
+    def test_large_decimal_differences_and_totals_are_not_rounded(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            left, right, output = directory/'left.csv', directory/'right.csv', directory/'result.xlsx'
+            amount = '9' * 26 + '.99'
+            amount_cents = int(amount.replace('.', ''))
+
+            def format_cents(value):
+                sign = '-' if value < 0 else ''
+                absolute = abs(value)
+                return f"{sign}{absolute // 100}.{absolute % 100:02d}"
+
+            ids = ['B201', 'B202']
+            left_rows = [[key, amount, '2026-11-01', 'large positive'] for key in ids]
+            right_rows = [[key, '-' + amount, '2026-11-01', 'large negative'] for key in ids]
+            for path, rows in ((left, left_rows), (right, right_rows)):
+                with path.open('w', encoding='utf-8-sig', newline='') as stream:
+                    csv.writer(stream).writerows([['ID', 'amount', 'date', 'note'], *rows])
+
+            fields = config.FieldMap('ID', 'amount', 'date', None, None)
+            settings = config.ReconcileConfig(
+                config.TableSpec(str(left), None, 0, fields),
+                config.TableSpec(str(right), None, 0, fields),
+                config.MatchConfig(direction_rule='none'), str(output), 'synthetic', 'synthetic'
+            )
+            summary = reconcile.run(settings, run_id='large-decimal', run_at='')
+
+            expected_side_total = format_cents(amount_cents * len(ids))
+            expected_diff = format_cents(amount_cents * len(ids) * 2)
+            expected_pair_diff = format_cents(amount_cents * 2)
+            self.assertEqual(summary['left_amount_total'], expected_side_total)
+            self.assertEqual(summary['right_amount_total'], '-' + expected_side_total)
+            self.assertEqual(summary['sum_amount_diff'], expected_diff)
+            self.assertTrue(summary['amount_reconciled'])
+
+            workbook = load_workbook(output, read_only=True, data_only=False)
+            try:
+                audit = list(workbook['审计明细'].values)
+                pair_diffs = {row[1]: row[4] for row in audit[1:]}
+                self.assertEqual(pair_diffs, {key: expected_pair_diff for key in ids})
+                overview = list(workbook['对账总览'].values)
+                self.assertEqual(overview[4][1], expected_side_total)
+                self.assertEqual(overview[5][1], '-' + expected_side_total)
+            finally:
+                workbook.close()
+
 if __name__=='__main__':unittest.main()
