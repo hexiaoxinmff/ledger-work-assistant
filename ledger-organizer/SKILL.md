@@ -75,7 +75,7 @@ PDF 一键流程自动先检查 OCR 固定版本和模型哈希，失败时尚�
 
 
 ## v0.20 本地 OCR 实验入口
-包内提供 `tools/local-ocr/recognize_image.py`，仅适用于预先准备且哈希匹配的指定本地模型和依赖，处理单张虚构 PNG/JPEG，输出带位置与人工复核状态的 JSON。参见 `references/local-ocr.md`。不自动下载模型，不把模型分数或识别结果当作已核实数字；暂不用于真实资料或自动写表。
+包内提供 `tools/local-ocr/recognize_image.py`，仅适用于预先准备且哈希匹配的指定本地模型和依赖，处理单张 PNG/JPEG，输出带位置与人工复核状态的 JSON。使用者显式运行 `python tools/local-ocr/prepare_models.py` 时，可从固定 ModelScope v3.10.0 地址下载并校验三份模型；脚本不安装依赖、不创建目录、不自动运行。参见 `references/local-ocr.md`。不把模型分数或识别结果当作已核实数字；仍须对照原图复核。
 
 
 ## v0.21 简单表格图片实验
@@ -244,4 +244,4 @@ DOCX 表格提取只接受普通文本节点；未知 Word 行内节点（例如
 
 ## v0.70 可选固定模型准备与真实推理冒烟
 
-仅当使用者显式运行 `tools/local-ocr/prepare_models.py --model-dir <已存在的RapidOCR models目录>` 时，脚本才访问固定 ModelScope v3.10.0 地址下载三份模型；每个文件限 512 MiB，写入暂存文件并验证 SHA-256 后才独占发布，错误文件不会覆盖或发布。脚本不安装依赖、不创建目录，也不在任务处理时自动下载。GitHub Actions 使用纯合成数字图像和固定真实模型跑推理冒烟，验证环境/模型能加载及该虚构数字被准确识别；它不估计真实票据准确率，结果依旧要求人工对照原图。
+仅当使用者显式运行 `tools/local-ocr/prepare_models.py` 时，脚本才访问固定 ModelScope v3.10.0 地址下载三份模型；每个文件限 512 MiB，写入暂存文件并验证 SHA-256 后才独占发布，错误文件不会覆盖或发布。脚本不安装依赖、不创建目录，也不在任务处理时自动下载。GitHub Actions 使用纯合成数字图像和固定真实模型跑推理冒烟，验证环境/模型能加载及该虚构数字被准确识别；它不估计真实票据准确率，结果依旧要求人工对照原图。
