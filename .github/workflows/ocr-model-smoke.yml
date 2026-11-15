@@ -44,3 +44,12 @@ jobs:
         run: python ledger-organizer/tools/local-ocr/recognize_image.py --check-runtime
       - name: Run real inference on a generated fictional number image
         run: python ledger-organizer/tools/local-ocr/real_model_smoke.py
+
+      - name: Measure real model on fictional numeric cases
+        run: |
+          python ledger-organizer/tools/local-ocr/real_model_numeric_eval.py --output "${{ runner.temp }}/ocr-numeric-report.json" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ocr-synthetic-numeric-report
+          path: ${{ runner.temp }}/ocr-numeric-report.json
+          retention-days: 7
