@@ -4,6 +4,8 @@ from __future__ import annotations
 from collections import defaultdict
 from decimal import Decimal
 
+from decimal_math import subtract_exact
+
 from config import MatchConfig
 from models import MatchOutcome, Status, StdRow
 
@@ -70,7 +72,7 @@ def match_primary(left: list[StdRow], right: list[StdRow], match: MatchConfig
             continue
         if len(lc) == 1 and len(rc) == 1:
             left_row, right_row = lc[0], rc[0]
-            diff = (left_row.amount or Decimal(0)) - (right_row.amount or Decimal(0))
+            diff = subtract_exact(left_row.amount or Decimal(0), right_row.amount or Decimal(0))
             if (left_row.date is not None and right_row.date is not None and
                     abs((left_row.date - right_row.date).days) > match.date_tolerance_days):
                 outcomes.append(MatchOutcome(Status.SUSPECT, left=left_row, right=right_row,
@@ -135,7 +137,7 @@ def match_composite(left_leftover: list[StdRow], right_leftover: list[StdRow],
             matched_l.add(left_row.row_id)
             matched_r.add(r.row_id)
             outcomes.append(MatchOutcome(Status.SUSPECT, left=left_row, right=r,
-                                         amount_diff=(left_row.amount or Decimal(0)) - (r.amount or Decimal(0)),
+                                         amount_diff=subtract_exact(left_row.amount or Decimal(0), r.amount or Decimal(0)),
                                          rule="日期超出容差，需人工核实"))
             continue
         matched_l.add(left_row.row_id)
