@@ -3,12 +3,13 @@ import re
 import unittest
 from pathlib import Path
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+LEDGER_ROOT = Path(__file__).resolve().parents[3]
+REPOSITORY_ROOT = LEDGER_ROOT.parent
 
 
 class ReleaseMetadata(unittest.TestCase):
     def test_readme_version_matches_skill_title(self):
-        skill = (REPOSITORY_ROOT / "ledger-organizer" / "SKILL.md").read_text(encoding="utf-8")
+        skill = (LEDGER_ROOT / "SKILL.md").read_text(encoding="utf-8")
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
         skill_versions = re.findall(r"^# 费用与收款台账整理助手 (v\d+\.\d+)$", skill, re.MULTILINE)
         readme_versions = re.findall(r"当前技能版本：(v\d+\.\d+)。", readme)
