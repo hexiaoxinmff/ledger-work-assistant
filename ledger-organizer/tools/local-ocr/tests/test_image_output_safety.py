@@ -44,8 +44,8 @@ class ImageOutputSafety(unittest.TestCase):
             crc = zlib.crc32(kind + payload) & 0xFFFFFFFF
             return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", crc)
         ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
-        pixels = zlib.compress(b"\\x00\\x00\\x00\\x00\\x00")
-        return b"\\x89PNG\\r\\n\\x1a\\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", pixels) + chunk(b"IEND", b"")
+        pixels = zlib.compress(b"\x00\x00\x00\x00\x00")
+        return b"\x89PNG\\r\\n\x1a\\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", pixels) + chunk(b"IEND", b"")
 
     def fixture(self, directory):
         source = directory / "synthetic.png"
@@ -62,7 +62,7 @@ class ImageOutputSafety(unittest.TestCase):
 
             jpeg = directory / "sample.jpg"
             frame = bytes([8]) + struct.pack(">HH", 240, 320) + bytes([3, 1, 0x11, 0, 2, 0x11, 0, 3, 0x11, 0])
-            jpeg.write_bytes(b"\\xff\\xd8\\xff\\xc0" + struct.pack(">H", len(frame) + 2) + frame)
+            jpeg.write_bytes(b"\xff\xd8\xff\xc0" + struct.pack(">H", len(frame) + 2) + frame)
             self.assertEqual(MODULE._preflight_image(jpeg), {"width": 320, "height": 240})
 
     def test_file_size_limit_is_enforced(self):
@@ -87,7 +87,7 @@ class ImageOutputSafety(unittest.TestCase):
             self.assertFalse(output.exists())
 
     def test_invalid_or_mismatched_image_header_is_rejected_before_runtime(self):
-        jpeg_header = b"\\xff\\xd8\\xff\\xc0\\x00\\x11" + bytes([8]) + struct.pack(">HH", 1, 1) + bytes([3, 1, 0x11, 0, 2, 0x11, 0, 3, 0x11, 0])
+        jpeg_header = b"\xff\xd8\xff\xc0\x00\x11" + bytes([8]) + struct.pack(">HH", 1, 1) + bytes([3, 1, 0x11, 0, 2, 0x11, 0, 3, 0x11, 0])
         cases = (("fake.png", b"not an image"), ("jpeg.png", jpeg_header))
         for name, content in cases:
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
