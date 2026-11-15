@@ -83,14 +83,15 @@ def evaluate():
                 if item.get("复核状态") != PENDING:
                     raise ValueError(f"{case['id']}: 结果未保留人工复核状态")
                 recognized.append(item["识别文本"])
-            actual = recognized[0] if len(recognized) == 1 else ""
-            distance = edit_distance(case["expected"], actual)
+            joined = "".join(recognized)
+            distance = edit_distance(case["expected"], joined)
             rows.append({
                 **case,
                 "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
                 "recognized_lines": recognized,
-                "exact_match": len(recognized) == 1 and actual == case["expected"],
-                "edit_distance": distance if len(recognized) == 1 else len(case["expected"]),
+                "recognized_joined_for_cer": joined,
+                "exact_match": len(recognized) == 1 and joined == case["expected"],
+                "edit_distance": distance,
                 "review_required": True,
             })
     total_chars = sum(len(row["expected"]) for row in rows)
