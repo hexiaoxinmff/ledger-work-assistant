@@ -167,7 +167,7 @@ def _inspect_xlsx_archive(source, requested_sheet):
             sheet_info = by_name[selected[1]]
             if sheet_info.file_size > MAX_XLSX_MEMBER_BYTES:
                 raise ValueError("工作表内容超过 128 MiB 上限")
-            pattern = re.compile(rb"<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?mergeCells(?=[\\s>/])")
+            pattern = re.compile(rb"<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?mergeCells(?=[\s>/])")
             tail = b""
             with archive.open(sheet_info) as stream:
                 while True:
