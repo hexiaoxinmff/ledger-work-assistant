@@ -50,6 +50,8 @@ def run(image,table_json,output):
     ocr_status=data.get('OCR识别状态')
     if ocr_status is None:ocr_status='旧版 OCR 网格缺少识别状态；不能据此判断原图空白，需人工查看'
     if not isinstance(ocr_status,str) or not ocr_status.strip():raise ValueError('OCR 识别状态无效')
+    if ocr_count==0 and not ocr_status.startswith(('未检出','旧版 OCR')):raise ValueError('零条 OCR 结果状态不匹配')
+    if ocr_count>0 and not ocr_status.startswith(('已检出','旧版 OCR')):raise ValueError('非空 OCR 结果状态不匹配')
     if type(rows) is not int or type(cols) is not int or not (1<=rows<=100 and 1<=cols<=30) or not isinstance(cells,list) or len(cells)!=rows*cols or not isinstance(unassigned,list) or type(ocr_count) is not int or ocr_count<0:
         raise ValueError('网格数据无效或缺少 OCR 识别条数')
     w=Workbook()
