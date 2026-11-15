@@ -130,7 +130,7 @@ def run(pdf,pages_dir,reviewed,output):
    try:
     if list(verify['复核记录'].values)[1:]!=decisions:raise ValueError('复核记录回读不一致')
     if list(verify['OCR片段来源'].values)[1:]!=expected_fragments:raise ValueError('OCR 片段来源回读不一致')
-    if list(verify['说明'].values)[7:]!=[list(row) for row in expected_page_statuses]:raise ValueError('页面 OCR 识别状态回读不一致')
+    if list(verify['说明'].values)[7:]!=expected_page_statuses:raise ValueError('页面 OCR 识别状态回读不一致')
    finally:verify.close()
   if sha(pdf)!=pdfhash or sha(reviewed)!=reviewhash or sha(manifestfile)!=manhash or any(sha(x)!=h for x,h in proof):raise ValueError('输入处理期间变化')
   os.link(tempname,output)
