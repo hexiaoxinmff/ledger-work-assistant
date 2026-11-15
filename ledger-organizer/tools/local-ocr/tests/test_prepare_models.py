@@ -77,6 +77,7 @@ class PrepareModelTests(unittest.TestCase):
             with (
                 mock.patch.object(MODULE.importlib.metadata, "version", return_value="3.10.0"),
                 mock.patch.object(MODULE, "MODELS", self.details),
+                mock.patch.object(MODULE, "package_model_dir", return_value=Path(temporary)),
                 mock.patch.object(MODULE, "urlopen") as opener,
             ):
                 with self.assertRaisesRegex(ValueError, "拒绝覆盖"):
