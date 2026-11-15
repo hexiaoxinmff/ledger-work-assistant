@@ -3,16 +3,27 @@ import argparse,hashlib,json,math,os
 from pathlib import Path
 import pypdfium2 as pdfium
 
-def sha(p):
- h=hashlib.sha256()
+MAX_PDF_BYTES=100*1024*1024
+
+def check_pdf_size(path,max_bytes=MAX_PDF_BYTES):
+ if os.path.getsize(path)>max_bytes:raise ValueError('PDF 文件超过 100 MiB 上限')
+
+def sha(p,max_bytes=MAX_PDF_BYTES):
+ check_pdf_size(p,max_bytes)
+ h=hashlib.sha256();total=0
  with open(p,'rb') as f:
-  for b in iter(lambda:f.read(1048576),b''):h.update(b)
+  for b in iter(lambda:f.read(1048576),b''):
+   total+=len(b)
+   if total>max_bytes:raise ValueError('PDF 文件在哈希期间超过 100 MiB 上限')
+   h.update(b)
  return h.hexdigest()
 
 def run(source,output_dir,dpi=120):
  source=Path(source).resolve();out=Path(output_dir).resolve()
  if source.suffix.lower()!='.pdf' or not 72<=dpi<=200:raise ValueError('只支持本地 PDF 和 72–200 DPI')
- before=sha(source);doc=pdfium.PdfDocument(str(source))
+ if not source.is_file():raise FileNotFoundError(source)
+ check_pdf_size(source,MAX_PDF_BYTES)
+ before=sha(source,MAX_PDF_BYTES);doc=pdfium.PdfDocument(str(source))
  try:
   count=len(doc)
   if not 1<=count<=20:raise ValueError('仅支持 1 至 20 页的试验文件')
@@ -35,7 +46,7 @@ def run(source,output_dir,dpi=120):
    finally:
     if bitmap is not None:bitmap.close()
     page.close()
-  if sha(source)!=before:raise ValueError('PDF 在处理期间变化')
+  if sha(source,MAX_PDF_BYTES)!=before:raise ValueError('PDF 在处理期间变化')
   manifest={'source_name':source.name,'source_sha256':before,'dpi':dpi,'page_count':count,'pages':pages,'status':'所有页面及数字均需人工核对'}
   with open(out/'pages.json','x',encoding='utf8') as f:json.dump(manifest,f,ensure_ascii=False,indent=2)
   return count
