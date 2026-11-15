@@ -15,7 +15,7 @@ HERE = Path(__file__).resolve().parents[1]
 def load_with_fake_vision_modules():
     fake_cv2 = types.ModuleType("cv2")
     fake_cv2.IMREAD_COLOR = 1
-    fake_cv2.imdecode = lambda encoded, mode: object()
+    fake_cv2.imdecode = lambda encoded, mode: types.SimpleNamespace(shape=(200, 300, 3))
     fake_numpy = types.ModuleType("numpy")
     fake_numpy.uint8 = object()
     fake_numpy.fromfile = lambda path, dtype=None: object()
