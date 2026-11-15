@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -70,24 +71,31 @@ def _download_one(directory, filename, details):
     return {"file": filename, "status": "downloaded_and_verified", "sha256": details["sha256"]}
 
 
-def prepare(model_dir):
+def package_model_dir():
+    spec = importlib.util.find_spec("rapidocr")
+    if spec is None or spec.origin is None:
+        raise ValueError("未发现 RapidOCR 安装位置；请先由使用者自行准备依赖")
+    return Path(spec.origin).resolve().parent / "models"
+
+
+def prepare():
     if importlib.metadata.version("rapidocr") != RAPIDOCR_VERSION:
         raise ValueError(f"仅支持 rapidocr=={RAPIDOCR_VERSION} 的固定模型包")
-    directory = Path(model_dir).expanduser().resolve()
+    directory = package_model_dir()
     if not directory.is_dir():
-        raise FileNotFoundError(f"模型目录必须已存在，不自动创建：{directory}")
+        raise FileNotFoundError(f"RapidOCR models 目录必须已存在，不自动创建：{directory}")
     return [_download_one(directory, name, details) for name, details in MODELS.items()]
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model-dir", required=True, help="RapidOCR 安装包的 models 目录；必须已存在")
-    args = parser.parse_args(argv)
-    results = prepare(args.model_dir)
+    parser.parse_args(argv)
+    directory = package_model_dir()
+    results = prepare()
     print(json.dumps({
         "purpose": "显式下载固定版本本地 OCR 模型；仅供虚构数据试用",
         "rapidocr_version": RAPIDOCR_VERSION,
-        "model_dir": str(Path(args.model_dir).expanduser().resolve()),
+        "model_dir": str(directory),
         "results": results,
         "network": "只访问代码内固定的 ModelScope v3.10.0 文件地址；每个文件经 SHA-256 校验后原子发布",
         "note": "此脚本不安装依赖；只有用户显式运行时才发起网络请求",
