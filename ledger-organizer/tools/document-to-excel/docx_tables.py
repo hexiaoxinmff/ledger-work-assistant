@@ -4,6 +4,13 @@ from xml.etree import ElementTree as ET
 from openpyxl import Workbook, load_workbook
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+MAX_DOCX_BYTES = 100 * 1024 * 1024
+MAX_DOCX_TOTAL_UNCOMPRESSED_BYTES = 512 * 1024 * 1024
+MAX_DOCX_MEMBER_BYTES = 128 * 1024 * 1024
+MAX_DOCX_DOCUMENT_XML_BYTES = 64 * 1024 * 1024
+MAX_DOCX_ENTRIES = 10_000
+MAX_DOCX_CELLS = 1_000_000
 CHINESE_FINANCIAL_DIGITS = set("壹贰貳叁參肆伍陆陸柒捌玖零〇")
 CHINESE_NUMBER_DIGITS = set("零〇一二两兩三四五六七八九十拾百佰千仟万萬亿億兆")
 CHINESE_NUMBER_UNITS = set("十拾百佰千仟万萬亿億元圆圓角分厘")
@@ -24,8 +31,33 @@ def sha(path):
     return h.hexdigest()
 
 def extract(path):
+    if os.path.getsize(path) > MAX_DOCX_BYTES:
+        raise ValueError("DOCX 文件超过 100 MiB 上限")
     with zipfile.ZipFile(path) as z:
-        root = ET.fromstring(z.read("word/document.xml"))
+        entries = z.infolist()
+        if len(entries) > MAX_DOCX_ENTRIES:
+            raise ValueError("DOCX ZIP 条目超过安全上限")
+        names = [entry.filename for entry in entries]
+        if len(names) != len(set(names)):
+            raise ValueError("DOCX ZIP 包含重复文件名")
+        total_size = 0
+        for entry in entries:
+            if entry.flag_bits & 0x1:
+                raise ValueError("不支持加密的 DOCX ZIP 条目")
+            if entry.file_size > MAX_DOCX_MEMBER_BYTES:
+                raise ValueError("DOCX ZIP 成员超过 128 MiB 上限")
+            total_size += entry.file_size
+            if total_size > MAX_DOCX_TOTAL_UNCOMPRESSED_BYTES:
+                raise ValueError("DOCX 解压后总大小超过 512 MiB 上限")
+        document_info = next((entry for entry in entries if entry.filename == "word/document.xml"), None)
+        if document_info is None:
+            raise ValueError("DOCX 缺少 word/document.xml")
+        if document_info.file_size > MAX_DOCX_DOCUMENT_XML_BYTES:
+            raise ValueError("DOCX 正文 XML 超过 64 MiB 上限")
+        document_xml = z.read(document_info)
+    if b"<!DOCTYPE" in document_xml.upper() or b"<!ENTITY" in document_xml.upper():
+        raise ValueError("DOCX XML 含 DTD 或实体声明，停止解析")
+    root = ET.fromstring(document_xml)
     body = root.find(W + "body")
     if body is None: raise ValueError("无法读取文档正文")
     for control in body.iter(W + "sdt"):
@@ -34,6 +66,7 @@ def extract(path):
     tables = body.findall(W + "tbl")
     if not tables: raise ValueError("未发现正文表格；本工具不提取正文或 OCR")
     rows = []
+    cell_count = 0
     for ti, tbl in enumerate(tables, 1):
         for tag in ('sym', 'sdt', 'fldChar', 'footnoteReference', 'endnoteReference', 'altChunk'):
             if tbl.find('.//' + W + tag) is not None:
@@ -42,6 +75,9 @@ def extract(path):
             raise ValueError("合并单元格或嵌套表格需用其他方法处理")
         for ri, row in enumerate(tbl.findall(W + "tr"), 1):
             for ci, cell in enumerate(row.findall(W + "tc"), 1):
+                cell_count += 1
+                if cell_count > MAX_DOCX_CELLS:
+                    raise ValueError("DOCX 单元格超过 100 万个安全处理上限")
                 if any(cell.findall(".//" + W + tag) for tag in ("drawing", "pict", "object", "instrText", "fldSimple", "tab", "br", "cr", "ins", "del")):
                     raise ValueError("表格包含图片、域、制表符、换行或修订，无法安全提取")
                 # Word may encode visible or semantically meaningful run content
