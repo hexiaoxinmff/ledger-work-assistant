@@ -1,8 +1,12 @@
 """Experimental grid-cell mapping for ONE simple straight-line table image."""
 import argparse, hashlib, json, math, os, tempfile
+from image_preflight import MAX_IMAGE_PIXELS, preflight_image
 from pathlib import Path
 import cv2
 import numpy as np
+
+MAX_OCR_JSON_BYTES = 25 * 1024 * 1024
+MAX_OCR_RESULTS = 100_000
 
 
 def sha(path):
@@ -49,7 +53,7 @@ def clusters(indices):
 
 def lines(img):
     gray=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY);h,w=gray.shape
-    if min(h,w)<60 or h*w>30000000:raise ValueError('图片尺寸超出实验范围')
+    if min(h,w)<60 or h*w>MAX_IMAGE_PIXELS:raise ValueError('图片尺寸超出实验范围')
     binary=cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)[1]
     hm=cv2.morphologyEx(binary,cv2.MORPH_OPEN,cv2.getStructuringElement(cv2.MORPH_RECT,(max(20,w//20),1)))
     vm=cv2.morphologyEx(binary,cv2.MORPH_OPEN,cv2.getStructuringElement(cv2.MORPH_RECT,(1,max(20,h//20))))
@@ -84,9 +88,12 @@ def map_table(image, ocrfile, output):
     if len({str(image),str(ocrfile),str(output)})<3 or output.suffix.lower()!='.json':raise ValueError('输入输出必须是不同文件，输出为 JSON')
     if not output.parent.is_dir():raise FileNotFoundError(f'输出目录不存在：{output.parent}')
     if os.path.lexists(output):raise FileExistsError(output)
+    image_info=preflight_image(image)
+    if ocrfile.stat().st_size>MAX_OCR_JSON_BYTES:raise ValueError('OCR JSON 超过 25 MiB 上限')
     imagehash=sha(image);ocrhash=sha(ocrfile);raw=json.loads(ocrfile.read_text(encoding='utf8'))
     results=raw.get('结果')
     if raw.get('来源sha256')!=imagehash or not isinstance(results,list):raise ValueError('OCR 结果与原图哈希不一致或格式无效')
+    if len(results)>MAX_OCR_RESULTS:raise ValueError('OCR 结果超过 10 万条上限')
     ocr_count=raw.get('识别条数',len(results))
     if type(ocr_count) is not int or ocr_count!=len(results):raise ValueError('OCR 识别条数与结果列表不一致')
     ocr_status=raw.get('识别状态')
@@ -100,6 +107,7 @@ def map_table(image, ocrfile, output):
         raise ValueError('非空 OCR 结果的识别状态不匹配')
     arr=np.fromfile(str(image),dtype=np.uint8);img=cv2.imdecode(arr,cv2.IMREAD_COLOR)
     if img is None:raise ValueError('无法读取图片')
+    if img.shape[1]!=image_info['width'] or img.shape[0]!=image_info['height']:raise ValueError('图片头尺寸与解码尺寸不一致')
     xs,ys=lines(img);cells=[]
     for ri,(y1,y2) in enumerate(zip(ys,ys[1:]),1):
         for ci,(x1,x2) in enumerate(zip(xs,xs[1:]),1):cells.append({'行':ri,'列':ci,'边界_像素':[x1,y1,x2,y2],'片段':[],'复核状态':'待人工核对原图'})
