@@ -211,6 +211,8 @@ def _xlsx_csv_rows(source, sheet, allow_display_loss, expected_columns):
             max_columns=max(max_columns,len(row))
             if row_count>1048576:
                 raise ValueError('表格行数超过 Excel 容量')
+            if row_count*max_columns>1000000:
+                raise ValueError('表格范围过大，请缩小范围（最多 100 万个单元格）')
             for cell in row:
                 _xlsx_cell_text(cell,allow_display_loss)
         if row_count*max_columns>1000000:
