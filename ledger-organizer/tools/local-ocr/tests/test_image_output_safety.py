@@ -118,6 +118,7 @@ class ImageOutputSafety(unittest.TestCase):
                     txts=["00042"],
                     boxes=[[[0, 0], [1, 0], [1, 1], [0, 1]]],
                     scores=[0.99],
+                    img=SimpleNamespace(shape=(1, 1, 3)),
                 )
 
         package.RapidOCR = FakeRapidOCR
@@ -165,11 +166,16 @@ class ImageOutputSafety(unittest.TestCase):
             ("boolean score", valid_box, True, "模型分数必须为 0 至 1 的有限数"),
             ("non-finite coordinate", [[0, 0], [1, 0], [1, float("nan")], [0, 1]], 0.99, "边界框坐标必须为有限数"),
             ("wrong corner count", [[0, 0], [1, 0], [1, 1]], 0.99, "必须包含四个角点"),
+            ("negative coordinate", [[-0.1, 0], [1, 0], [1, 1], [0, 1]], 0.99, "超出引擎实际处理图片范围"),
+            ("coordinate beyond image", [[0, 0], [1.01, 0], [1, 1], [0, 1]], 0.99, "超出引擎实际处理图片范围"),
         ]
         for label, box, score, message in cases:
             with self.subTest(case=label), tempfile.TemporaryDirectory() as temporary:
                 source, output = self.fixture(Path(temporary))
-                result = SimpleNamespace(txts=["00042"], boxes=[box], scores=[score])
+                result = SimpleNamespace(
+                    txts=["00042"], boxes=[box], scores=[score],
+                    img=SimpleNamespace(shape=(1, 1, 3)),
+                )
                 with (
                     mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}),
                     mock.patch.object(MODULE, "_recognize_without_python_socket_access", return_value=result),
@@ -178,6 +184,23 @@ class ImageOutputSafety(unittest.TestCase):
                         MODULE.run(source, output)
                 self.assertFalse(output.exists())
                 self.assertEqual(list(Path(temporary).glob(".ledger-ocr-*")), [])
+
+    def test_detection_coordinates_require_source_image_dimensions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source, output = self.fixture(Path(temporary))
+            result = SimpleNamespace(
+                txts=["00042"],
+                boxes=[[[0, 0], [1, 0], [1, 1], [0, 1]]],
+                scores=[0.99],
+            )
+            with (
+                mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}),
+                mock.patch.object(MODULE, "_recognize_without_python_socket_access", return_value=result),
+            ):
+                with self.assertRaisesRegex(ValueError, "无法确认引擎实际处理的图片尺寸"):
+                    MODULE.run(source, output)
+            self.assertFalse(output.exists())
+            self.assertEqual(list(Path(temporary).glob(".ledger-ocr-*")), [])
 
     def test_no_detection_is_explicit_and_partial_result_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
