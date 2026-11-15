@@ -330,6 +330,31 @@ class PdfTextToExcel(unittest.TestCase):
             finally:
                 workbook.close()
 
+
+    def test_pdf_size_limit_runs_before_hash_or_extraction(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source = directory / "oversized.pdf"
+            output = directory / "review.xlsx"
+            make_pdf(source, [b"BT /F1 12 Tf 72 720 Td (Amount 12.30) Tj ET"])
+            with patch.object(module, "MAX_PDF_BYTES", 1):
+                with patch.object(module, "sha256") as digest:
+                    with patch.object(module, "_extract") as extract:
+                        with self.assertRaisesRegex(ValueError, "PDF 文件超过"):
+                            module.run(source, output)
+                        digest.assert_not_called()
+                        extract.assert_not_called()
+            self.assertFalse(output.exists())
+            self.assertEqual(list(directory.glob(".ledger-pdf-text-*")), [])
+
+    def test_pdf_hash_rejects_growth_after_initial_size_check(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "changed.pdf"
+            source.write_bytes(b"two bytes")
+            with patch.object(module.os.path, "getsize", return_value=1):
+                with self.assertRaisesRegex(ValueError, "读取期间超过"):
+                    module.sha256(source, max_bytes=1)
+
     def test_existing_output_source_change_and_readback_failure_are_safe(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
