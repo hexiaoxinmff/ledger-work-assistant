@@ -58,6 +58,10 @@ def run(pdf,pages_dir,reviewed,output):
   if len(seen)!=rows*cols:raise ValueError('单元格缺失')
   page_fragments.sort(key=lambda item:item[1])
   if len(page_fragments)!=ocr_count or [item[1] for item in page_fragments]!=list(range(1,ocr_count+1)):raise ValueError('OCR 片段存在缺失、重复或序号不连续')
+  for fragment in page_fragments:
+   source=ocr_rows[fragment[1]-1]
+   if not isinstance(source,dict) or source.get('识别文本')!=fragment[5] or source.get('模型分数')!=fragment[6] or json.dumps(source.get('位置_像素'),ensure_ascii=False)!=fragment[7]:
+    raise ValueError('网格片段与来源 OCR 原始结果不一致')
   expected_fragments.extend(page_fragments)
   expected_provenance.update({f"第{i}页图片 SHA-256":ih,f"第{i}页 OCR JSON SHA-256":oh,f"第{i}页网格 JSON SHA-256":gh})
   proof.extend([(image,ih),(ocr,oh),(grid,gh)])
