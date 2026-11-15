@@ -4,6 +4,7 @@ import hashlib
 import importlib.metadata as metadata
 import importlib.util
 import json
+import math
 import os
 import socket
 import tempfile
@@ -72,6 +73,40 @@ def _recognize_without_python_socket_access(source, model_paths):
     return result
 
 
+def _finite_float(value, label):
+    if isinstance(value, bool):
+        raise ValueError(label)
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(label) from exc
+    if not math.isfinite(number):
+        raise ValueError(label)
+    return number
+
+
+def _validated_box(box):
+    try:
+        points = list(box)
+    except TypeError as exc:
+        raise ValueError("OCR 边界框格式无效") from exc
+    if len(points) != 4:
+        raise ValueError("OCR 边界框必须包含四个角点")
+    validated = []
+    for point in points:
+        try:
+            coordinates = list(point)
+        except TypeError as exc:
+            raise ValueError("OCR 边界框格式无效") from exc
+        if len(coordinates) != 2:
+            raise ValueError("OCR 边界框必须使用二维坐标")
+        validated.append([
+            round(_finite_float(coordinates[0], "OCR 边界框坐标必须为有限数"), 2),
+            round(_finite_float(coordinates[1], "OCR 边界框坐标必须为有限数"), 2),
+        ])
+    return validated
+
+
 def run(source, output):
     source = Path(source).resolve()
     output = Path(output).resolve()
@@ -99,10 +134,15 @@ def run(source, output):
         if not len(texts) == len(boxes) == len(scores):
             raise ValueError("识别字段数量不一致")
         for text, box, score in zip(texts, boxes, scores):
+            if not isinstance(text, str):
+                raise ValueError("OCR 识别文本格式无效")
+            score_value = _finite_float(score, "OCR 模型分数必须为 0 至 1 的有限数")
+            if not 0 <= score_value <= 1:
+                raise ValueError("OCR 模型分数必须为 0 至 1 的有限数")
             records.append({
-                "识别文本": str(text),
-                "位置_像素": [[round(float(x), 2), round(float(y), 2)] for x, y in box],
-                "模型分数": round(float(score), 4),
+                "识别文本": text,
+                "位置_像素": _validated_box(box),
+                "模型分数": round(score_value, 4),
                 "复核状态": "待人工核对原图",
             })
     if sha(source) != before:
@@ -122,7 +162,7 @@ def run(source, output):
     )
     try:
         with os.fdopen(fd, "w", encoding="utf8") as stream:
-            json.dump(data, stream, ensure_ascii=False, indent=2)
+            json.dump(data, stream, ensure_ascii=False, indent=2, allow_nan=False)
             stream.flush()
             os.fsync(stream.fileno())
         with open(temporary, encoding="utf8") as stream:
