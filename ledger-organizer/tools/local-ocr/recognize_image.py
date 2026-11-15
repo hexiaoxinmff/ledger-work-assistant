@@ -48,7 +48,7 @@ def _validate_dimensions(width, height):
 
 
 def _png_dimensions(stream):
-    if stream.read(8) != b"\x89PNG\\r\\n\x1a\\n":
+    if stream.read(8) != b"\x89PNG\r\n\x1a\n":
         raise ValueError("文件内容与 PNG 格式不符")
     chunk = stream.read(25)
     if len(chunk) != 25:
