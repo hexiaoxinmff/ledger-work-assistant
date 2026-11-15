@@ -2,3 +2,4 @@ rapidocr==3.10.0
 onnxruntime==1.20.1
 openpyxl==3.1.5
 pypdfium2==5.14.0
+Pillow==13.0.0

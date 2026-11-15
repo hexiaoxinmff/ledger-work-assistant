@@ -1,0 +1,46 @@
+name: OCR pinned model smoke test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ledger-organizer/tools/local-ocr/**"
+      - "ledger-organizer/references/local-ocr.md"
+      - "ledger-organizer/SKILL.md"
+      - "README.md"
+      - ".github/workflows/ocr-model-smoke.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "ledger-organizer/tools/local-ocr/**"
+      - "ledger-organizer/references/local-ocr.md"
+      - "ledger-organizer/SKILL.md"
+      - "README.md"
+      - ".github/workflows/ocr-model-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-model-smoke:
+    name: Python 3.12 / Ubuntu / pinned real model
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned OCR runtime for isolated CI
+        run: python -m pip install rapidocr==3.10.0 onnxruntime==1.20.1 Pillow==13.0.0
+      - name: Download fixed public model files and verify SHA-256
+        run: python ledger-organizer/tools/local-ocr/prepare_models.py
+      - name: Run offline model preparation safety tests
+        run: python -m unittest discover -s ledger-organizer/tools/local-ocr/tests -p test_prepare_models.py -v
+      - name: Verify installed versions and model hashes
+        run: python ledger-organizer/tools/local-ocr/recognize_image.py --check-runtime
+      - name: Run real inference on a generated fictional number image
+        run: python ledger-organizer/tools/local-ocr/real_model_smoke.py

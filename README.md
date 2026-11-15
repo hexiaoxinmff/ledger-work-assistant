@@ -4,7 +4,7 @@
 
 ## 安装和使用
 
-当前技能版本：v0.69。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
+当前技能版本：v0.70。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
 
 本机虚构回归入口：`python ledger-organizer/tools/run_checks.py`。默认执行基础环境/样例/转换/Word 提取测试；对账业务规则测试用 `--suite ledger`（需预装 pandas、openpyxl、PyYAML），PDF 文字层转表测试用 `--suite pdf-text`（需预装 pypdfium2、openpyxl），OCR 相关测试用 `--suite ocr`，全部用 `--suite all`。各组依赖须事先满足，报告保留失败、超时和未运行项目，不能将部分通过当成全功能通过。这些测试不包含真实账目、平台自主调用、界面或 OCR 准确率验收。
 
@@ -52,7 +52,7 @@ python ledger-organizer/tools/format-conversion/convert_table.py ledger-organize
 
 ## 本地图片 OCR 实验
 
-包内提供单张图片识别脚本 `ledger-organizer/tools/local-ocr/recognize_image.py`，使用预先安装的指定 RapidOCR/ONNX Runtime 和通过哈希检查的模型；项目不含模型、不自动安装下载。输出识别文本、位置及待人工复核状态，不自动填账或恢复表格。仅供虚构样例测试，完整限制见 `ledger-organizer/references/local-ocr.md`。
+包内提供单图识别脚本及 `prepare_models.py`。使用者显式运行准备脚本时，它会在已安装 RapidOCR 的 models 目录中下载三份固定模型并校验 SHA-256；不安装依赖、不创建目录、不覆盖已有文件。识别结果保留原文、位置和待人工复核状态；GitHub Actions 会用临时生成的虚构数字图像运行固定真实模型冒烟测试。完整限制见 `ledger-organizer/references/local-ocr.md`。
 
 虚构 OCR 输出可用 `ledger-organizer/tools/local-ocr/evaluate_accuracy.py` 与真值清单评分，统计金额/日期/编号的完全匹配率、CER 和漏/多识别行；评分结果仍全部待人工复核，不能用于确认真实数据。
 
