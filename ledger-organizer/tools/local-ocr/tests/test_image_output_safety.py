@@ -15,6 +15,8 @@ from unittest import mock
 from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parents[1]
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
 SPEC = importlib.util.spec_from_file_location("recognize_image", HERE / "recognize_image.py")
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
