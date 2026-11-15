@@ -1,6 +1,6 @@
 """Experimental grid-cell mapping for ONE simple straight-line table image."""
 import argparse, hashlib, json, math, os, tempfile
-from image_preflight import MAX_IMAGE_PIXELS, preflight_image
+from image_preflight import MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS, preflight_image
 from pathlib import Path
 import cv2
 import numpy as np
@@ -9,11 +9,30 @@ MAX_OCR_JSON_BYTES = 25 * 1024 * 1024
 MAX_OCR_RESULTS = 100_000
 
 
-def sha(path):
+def sha(path, max_bytes):
     h=hashlib.sha256()
+    total=0
     with open(path,'rb') as f:
-        for b in iter(lambda:f.read(1048576),b''):h.update(b)
+        for b in iter(lambda:f.read(1048576),b''):
+            total += len(b)
+            if total > max_bytes:
+                raise ValueError('输入文件在读取期间超过大小上限')
+            h.update(b)
     return h.hexdigest()
+
+
+def read_bounded(path, max_bytes):
+    chunks=[]
+    total=0
+    with open(path,'rb') as f:
+        while total <= max_bytes:
+            chunk=f.read(min(1048576, max_bytes + 1 - total))
+            if not chunk:break
+            chunks.append(chunk)
+            total += len(chunk)
+    if total > max_bytes:
+        raise ValueError('OCR JSON 超过 25 MiB 上限')
+    return b''.join(chunks)
 
 
 def _validated_ocr_box(box, width, height):
@@ -90,7 +109,10 @@ def map_table(image, ocrfile, output):
     if os.path.lexists(output):raise FileExistsError(output)
     image_info=preflight_image(image)
     if ocrfile.stat().st_size>MAX_OCR_JSON_BYTES:raise ValueError('OCR JSON 超过 25 MiB 上限')
-    imagehash=sha(image);ocrhash=sha(ocrfile);raw=json.loads(ocrfile.read_text(encoding='utf8'))
+    imagehash=sha(image, MAX_IMAGE_BYTES)
+    ocr_bytes=read_bounded(ocrfile, MAX_OCR_JSON_BYTES)
+    ocrhash=hashlib.sha256(ocr_bytes).hexdigest()
+    raw=json.loads(ocr_bytes.decode('utf8'))
     results=raw.get('结果')
     if raw.get('来源sha256')!=imagehash or not isinstance(results,list):raise ValueError('OCR 结果与原图哈希不一致或格式无效')
     if len(results)>MAX_OCR_RESULTS:raise ValueError('OCR 结果超过 10 万条上限')
@@ -135,7 +157,7 @@ def map_table(image, ocrfile, output):
     data={'用途':'仅虚构样例，自动网格及所有识别结果均须人工复核；空白格不代表原图为空',
           '来源文件名':image.name,'来源sha256':imagehash,'OCR结果sha256':ocrhash,
           '行数':len(ys)-1,'列数':len(xs)-1,'OCR识别条数':ocr_count,'OCR识别状态':ocr_status,'单元格':cells,'未归属片段':unassigned}
-    if sha(image)!=imagehash or sha(ocrfile)!=ocrhash:raise ValueError('输入文件在处理期间发生变化')
+    if sha(image, MAX_IMAGE_BYTES)!=imagehash or sha(ocrfile, MAX_OCR_JSON_BYTES)!=ocrhash:raise ValueError('输入文件在处理期间发生变化')
     fd,temporary=tempfile.mkstemp(prefix='.ledger-grid-',suffix='.json.tmp',dir=output.parent)
     try:
         with os.fdopen(fd,'w',encoding='utf8') as stream:
@@ -143,7 +165,7 @@ def map_table(image, ocrfile, output):
             stream.flush();os.fsync(stream.fileno())
         with open(temporary,encoding='utf8') as stream:
             if json.load(stream)!=data:raise ValueError('网格 JSON 暂存结果回读不一致')
-        if sha(image)!=imagehash or sha(ocrfile)!=ocrhash:raise ValueError('输入文件在处理期间发生变化')
+        if sha(image, MAX_IMAGE_BYTES)!=imagehash or sha(ocrfile, MAX_OCR_JSON_BYTES)!=ocrhash:raise ValueError('输入文件在处理期间发生变化')
         os.link(temporary,output)
     finally:
         if os.path.exists(temporary):os.unlink(temporary)
