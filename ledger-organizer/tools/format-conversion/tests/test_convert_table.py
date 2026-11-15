@@ -1,5 +1,5 @@
 """Synthetic tests: distinguish cell values from Excel's displayed formatting."""
-import csv, datetime, importlib.util, os, subprocess, sys, tempfile, time, unittest
+import csv, datetime, importlib.util, os, re, subprocess, sys, tempfile, time, unittest, zipfile
 from pathlib import Path
 from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
@@ -173,5 +173,32 @@ class ConvertTable(unittest.TestCase):
    workbook=load_workbook(output,read_only=True,data_only=False)
    try:self.assertEqual([[v if v is not None else '' for v in row] for row in workbook.active.iter_rows(values_only=True)],rows)
    finally:workbook.close()
+
+ def test_xlsx_to_csv_uses_bounded_read_only_preflight(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   directory=Path(tmp);source=directory/'source.xlsx';output=directory/'output.csv'
+   workbook=Workbook();workbook.active['A1']='编号';workbook.active['B2']='00042';workbook.save(source);workbook.close()
+   corrupt=directory/'corrupt-dimension.xlsx'
+   with zipfile.ZipFile(source) as original,zipfile.ZipFile(corrupt,'w',zipfile.ZIP_DEFLATED) as changed:
+    for item in original.infolist():
+     data=original.read(item.filename)
+     if item.filename=='xl/worksheets/sheet1.xml':
+      data=re.sub(rb'<dimension ref="[^"]+"\s*/>',b'<dimension ref="A1:A1"/>',data)
+     changed.writestr(item,data)
+   self.assertEqual(module.run(str(corrupt),str(output),expected_columns=2),2)
+   with output.open(encoding='utf-8-sig',newline='') as stream:
+    self.assertEqual(list(csv.reader(stream)),[['编号',''],['','00042']])
+
+ def test_xlsx_merge_and_resource_limits_rejected_before_loading(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   directory=Path(tmp);merged=directory/'merged.xlsx';output=directory/'merged.csv'
+   workbook=Workbook();workbook.active.merge_cells('A1:B1');workbook.active['A1']='标题';workbook.save(merged);workbook.close()
+   with self.assertRaisesRegex(ValueError,'合并单元格'):module.run(str(merged),str(output))
+   self.assertFalse(output.exists())
+   ordinary=directory/'ordinary.xlsx';workbook=Workbook();workbook.active['A1']='id';workbook.save(ordinary);workbook.close()
+   with patch.object(module,'MAX_XLSX_BYTES',1),patch.object(module,'load_workbook') as loader:
+    with self.assertRaisesRegex(ValueError,'100 MiB'):module.run(str(ordinary),str(output))
+    loader.assert_not_called()
+   self.assertFalse(output.exists())
 
 if __name__=='__main__':unittest.main()
