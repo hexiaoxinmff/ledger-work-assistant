@@ -6,6 +6,7 @@ import importlib.util
 import json
 import math
 import os
+import operator
 import socket
 import struct
 import tempfile
@@ -183,7 +184,24 @@ def _finite_float(value, label):
     return number
 
 
-def _validated_box(box):
+def _image_dimensions(result):
+    image = getattr(result, "img", None)
+    shape = getattr(image, "shape", None)
+    try:
+        if shape is None or len(shape) < 2:
+            raise ValueError
+        height, width = shape[0], shape[1]
+        if isinstance(height, bool) or isinstance(width, bool):
+            raise ValueError
+        height, width = operator.index(height), operator.index(width)
+    except (TypeError, ValueError, IndexError) as exc:
+        raise ValueError("OCR 有识别框但无法确认引擎实际处理的图片尺寸") from exc
+    if width <= 0 or height <= 0:
+        raise ValueError("OCR 引擎返回的图片尺寸无效")
+    return width, height
+
+
+def _validated_box(box, width, height):
     try:
         points = list(box)
     except TypeError as exc:
@@ -198,10 +216,11 @@ def _validated_box(box):
             raise ValueError("OCR 边界框格式无效") from exc
         if len(coordinates) != 2:
             raise ValueError("OCR 边界框必须使用二维坐标")
-        validated.append([
-            round(_finite_float(coordinates[0], "OCR 边界框坐标必须为有限数"), 2),
-            round(_finite_float(coordinates[1], "OCR 边界框坐标必须为有限数"), 2),
-        ])
+        x = _finite_float(coordinates[0], "OCR 边界框坐标必须为有限数")
+        y = _finite_float(coordinates[1], "OCR 边界框坐标必须为有限数")
+        if not (0 <= x <= width and 0 <= y <= height):
+            raise ValueError("OCR 边界框坐标超出引擎实际处理图片范围")
+        validated.append([round(x, 2), round(y, 2)])
     return validated
 
 
@@ -236,6 +255,7 @@ def run(source, output):
         texts, boxes, scores = (list(value) for value in raw_values)
     if not len(texts) == len(boxes) == len(scores):
         raise ValueError("识别字段数量不一致")
+    image_width, image_height = _image_dimensions(result) if texts else (None, None)
     records = []
     for text, box, score in zip(texts, boxes, scores):
         if not isinstance(text, str):
@@ -245,7 +265,7 @@ def run(source, output):
             raise ValueError("OCR 模型分数必须为 0 至 1 的有限数")
         records.append({
             "识别文本": text,
-            "位置_像素": _validated_box(box),
+            "位置_像素": _validated_box(box, image_width, image_height),
             "模型分数": round(score_value, 4),
             "复核状态": "待人工核对原图",
         })
