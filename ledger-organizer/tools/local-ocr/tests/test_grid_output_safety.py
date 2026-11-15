@@ -2,14 +2,18 @@
 import hashlib
 import importlib.util
 import json
+import struct
 import sys
 import tempfile
 import types
 import unittest
+import zlib
 from pathlib import Path
 from unittest import mock
 
 HERE = Path(__file__).resolve().parents[1]
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
 
 
 def load_with_fake_vision_modules():
@@ -40,9 +44,15 @@ def sha(path):
 
 
 class GridOutputSafety(unittest.TestCase):
+    def png_header(self, width=300, height=200):
+        kind = b"IHDR"
+        payload = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+        crc = zlib.crc32(kind + payload) & 0xFFFFFFFF
+        return b"\\x89PNG\\r\\n\\x1a\\n" + struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", crc)
+
     def fixtures(self, directory):
         image = directory / "synthetic.png"
-        image.write_bytes(b"synthetic image bytes")
+        image.write_bytes(self.png_header())
         ocr = directory / "synthetic-ocr.json"
         ocr_data = {
             "来源sha256": sha(image),
@@ -133,10 +143,44 @@ class GridOutputSafety(unittest.TestCase):
             self.assertEqual(data["未归属片段"][0]["模型分数"], 0.61)
             self.assertEqual(list(directory.glob(".ledger-grid-*")), [])
 
+    def test_grid_image_and_json_limits_run_before_decode(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            image = directory / "oversized.png"
+            image.write_bytes(self.png_header(5001, 5000))
+            ocr = directory / "ocr.json"
+            ocr.write_text(json.dumps({
+                "来源sha256": sha(image), "结果": [],
+            }, ensure_ascii=False), encoding="utf8")
+            output = directory / "grid.json"
+            with mock.patch.object(GRID.cv2, "imdecode") as decode:
+                with self.assertRaisesRegex(ValueError, "2500 万像素"):
+                    GRID.map_table(image, ocr, output)
+                decode.assert_not_called()
+            self.assertFalse(output.exists())
+
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            image, ocr, output, _ = self.fixtures(directory)
+            with mock.patch.object(GRID, "MAX_OCR_JSON_BYTES", 1), mock.patch.object(GRID.cv2, "imdecode") as decode:
+                with self.assertRaisesRegex(ValueError, "OCR JSON"):
+                    GRID.map_table(image, ocr, output)
+                decode.assert_not_called()
+            self.assertFalse(output.exists())
+
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            image, ocr, output, _ = self.fixtures(directory)
+            with mock.patch.object(GRID, "MAX_OCR_RESULTS", 1), mock.patch.object(GRID.cv2, "imdecode") as decode:
+                with self.assertRaisesRegex(ValueError, "10 万条"):
+                    GRID.map_table(image, ocr, output)
+                decode.assert_not_called()
+            self.assertFalse(output.exists())
+
     def test_no_detection_status_survives_grid_and_single_image_review(self):
         from openpyxl import load_workbook
         with tempfile.TemporaryDirectory() as temporary:
-            directory=Path(temporary);image=directory/"blank-table.png";image.write_bytes(b"synthetic")
+            directory=Path(temporary);image=directory/"blank-table.png";image.write_bytes(self.png_header())
             ocr=directory/"no-detections.json"
             status="未检出文字候选；不能据此判断原图空白，需人工查看"
             ocr.write_text(json.dumps({
@@ -215,7 +259,7 @@ class GridOutputSafety(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory=Path(temporary);pages=directory/"pages";pages.mkdir()
             pdf=directory/"synthetic.pdf";pdf.write_bytes(b"synthetic PDF bytes")
-            image=pages/"page_0001.png";image.write_bytes(b"synthetic page image")
+            image=pages/"page_0001.png";image.write_bytes(self.png_header())
             image_hash=sha(image)
             ocr=pages/"page_0001_ocr.json"
             ocr_data={"来源sha256":image_hash,"结果":[
