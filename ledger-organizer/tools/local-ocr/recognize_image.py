@@ -126,25 +126,30 @@ def run(source, output):
     runtime = check_runtime()
     before = sha(source)
     result = _recognize_without_python_socket_access(source, runtime["model_paths"])
+    if result is None or not all(hasattr(result, field) for field in ("txts", "boxes", "scores")):
+        raise ValueError("OCR 引擎未返回完整结果结构")
+    raw_values = (result.txts, result.boxes, result.scores)
+    if all(value is None for value in raw_values):
+        texts, boxes, scores = [], [], []
+    elif any(value is None for value in raw_values):
+        raise ValueError("OCR 引擎返回的识别字段不完整")
+    else:
+        texts, boxes, scores = (list(value) for value in raw_values)
+    if not len(texts) == len(boxes) == len(scores):
+        raise ValueError("识别字段数量不一致")
     records = []
-    if result is not None and result.txts is not None:
-        texts = list(result.txts)
-        boxes = list(result.boxes)
-        scores = list(result.scores)
-        if not len(texts) == len(boxes) == len(scores):
-            raise ValueError("识别字段数量不一致")
-        for text, box, score in zip(texts, boxes, scores):
-            if not isinstance(text, str):
-                raise ValueError("OCR 识别文本格式无效")
-            score_value = _finite_float(score, "OCR 模型分数必须为 0 至 1 的有限数")
-            if not 0 <= score_value <= 1:
-                raise ValueError("OCR 模型分数必须为 0 至 1 的有限数")
-            records.append({
-                "识别文本": text,
-                "位置_像素": _validated_box(box),
-                "模型分数": round(score_value, 4),
-                "复核状态": "待人工核对原图",
-            })
+    for text, box, score in zip(texts, boxes, scores):
+        if not isinstance(text, str):
+            raise ValueError("OCR 识别文本格式无效")
+        score_value = _finite_float(score, "OCR 模型分数必须为 0 至 1 的有限数")
+        if not 0 <= score_value <= 1:
+            raise ValueError("OCR 模型分数必须为 0 至 1 的有限数")
+        records.append({
+            "识别文本": text,
+            "位置_像素": _validated_box(box),
+            "模型分数": round(score_value, 4),
+            "复核状态": "待人工核对原图",
+        })
     if sha(source) != before:
         raise ValueError("原图在识别期间变化，结果不可交付")
 
@@ -153,6 +158,11 @@ def run(source, output):
         "来源文件名": source.name,
         "来源sha256": before,
         "识别引擎": "RapidOCR 3.10.0 / ONNX Runtime 1.20.1",
+        "识别状态": (
+            "已检出候选，全部待人工复核"
+            if records else "未检出文字候选；不能据此判断原图空白，需人工查看"
+        ),
+        "识别条数": len(records),
         "网络": "本进程在推理期间拦截 Python socket 连接，不代表操作系统级隔离",
         "结果": records,
     }
