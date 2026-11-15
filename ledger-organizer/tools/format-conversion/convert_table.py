@@ -1,5 +1,6 @@
 """Local CSV/XLSX value conversion, with explicit limits and verification."""
-import argparse, csv, hashlib, itertools, os, re, tempfile, unicodedata
+import argparse, csv, hashlib, itertools, os, posixpath, re, tempfile, unicodedata, zipfile
+from xml.etree import ElementTree as ET
 from openpyxl import Workbook, load_workbook
 from openpyxl.cell import WriteOnlyCell
 
@@ -92,6 +93,96 @@ def _csv_to_write_only_workbook(source, encoding, separator, expected_columns):
     return workbook, row_count, column_count
 
 
+MAX_XLSX_BYTES = 100 * 1024 * 1024
+MAX_XLSX_TOTAL_UNCOMPRESSED_BYTES = 512 * 1024 * 1024
+MAX_XLSX_MEMBER_BYTES = 128 * 1024 * 1024
+MAX_XLSX_SHARED_STRINGS_BYTES = 16 * 1024 * 1024
+MAX_XLSX_ENTRIES = 10000
+MAX_XLSX_METADATA_BYTES = 4 * 1024 * 1024
+
+
+def _inspect_xlsx_archive(source, requested_sheet):
+    if os.path.getsize(source) > MAX_XLSX_BYTES:
+        raise ValueError("XLSX 文件超过 100 MiB 上限")
+    try:
+        with zipfile.ZipFile(source) as archive:
+            entries = archive.infolist()
+            if len(entries) > MAX_XLSX_ENTRIES:
+                raise ValueError("XLSX ZIP 条目超过安全上限")
+            names = [entry.filename for entry in entries]
+            if len(names) != len(set(names)):
+                raise ValueError("XLSX ZIP 包含重复文件名")
+            total_size = 0
+            for entry in entries:
+                if entry.flag_bits & 0x1:
+                    raise ValueError("不支持加密的 XLSX ZIP 条目")
+                if entry.file_size > MAX_XLSX_MEMBER_BYTES:
+                    raise ValueError("XLSX 内部文件超过 128 MiB 上限")
+                if entry.filename == "xl/sharedStrings.xml" and entry.file_size > MAX_XLSX_SHARED_STRINGS_BYTES:
+                    raise ValueError("XLSX 共享字符串表超过 16 MiB 上限")
+                total_size += entry.file_size
+                if total_size > MAX_XLSX_TOTAL_UNCOMPRESSED_BYTES:
+                    raise ValueError("XLSX 解压后总大小超过 512 MiB 上限")
+            by_name = {entry.filename: entry for entry in entries}
+            workbook_info = by_name.get("xl/workbook.xml")
+            rels_info = by_name.get("xl/_rels/workbook.xml.rels")
+            if workbook_info is None or rels_info is None:
+                raise ValueError("XLSX 缺少工作簿结构文件")
+            if workbook_info.file_size > MAX_XLSX_METADATA_BYTES or rels_info.file_size > MAX_XLSX_METADATA_BYTES:
+                raise ValueError("XLSX 工作簿元数据超过 4 MiB 上限")
+            workbook_root = ET.fromstring(archive.read(workbook_info))
+            rels_root = ET.fromstring(archive.read(rels_info))
+            relation_ns = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+            package_ns = "{http://schemas.openxmlformats.org/package/2006/relationships}"
+            rels = {
+                rel.attrib.get("Id"): rel
+                for rel in rels_root.findall(package_ns + "Relationship")
+            }
+            sheets = []
+            for node in workbook_root.findall(".//{http://schemas.openxmlformats.org/spreadsheetml/2006/main}sheet"):
+                name = node.attrib.get("name")
+                relation_id = node.attrib.get(relation_ns + "id")
+                relation = rels.get(relation_id)
+                if not name or relation is None or relation.attrib.get("TargetMode") == "External":
+                    raise ValueError("XLSX 工作表关系无效")
+                target = relation.attrib.get("Target", "")
+                sheet_path = (
+                    posixpath.normpath(target.lstrip("/"))
+                    if target.startswith("/")
+                    else posixpath.normpath(posixpath.join("xl", target))
+                )
+                if not sheet_path.startswith("xl/") or sheet_path not in by_name:
+                    raise ValueError("XLSX 工作表路径无效")
+                sheets.append((name, sheet_path))
+            if not sheets:
+                raise ValueError("XLSX 未包含工作表")
+            if requested_sheet is None:
+                if len(sheets) != 1:
+                    raise ValueError("多个工作表，请指定 --sheet")
+                selected = sheets[0]
+            else:
+                selected = next((item for item in sheets if item[0] == requested_sheet), None)
+                if selected is None:
+                    raise ValueError("指定的工作表不存在")
+            sheet_info = by_name[selected[1]]
+            if sheet_info.file_size > MAX_XLSX_MEMBER_BYTES:
+                raise ValueError("工作表内容超过 128 MiB 上限")
+            pattern = re.compile(rb"<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?mergeCells(?=[\\s>/])")
+            tail = b""
+            with archive.open(sheet_info) as stream:
+                while True:
+                    chunk = stream.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    data = tail + chunk
+                    if pattern.search(data):
+                        raise ValueError("存在合并单元格，请先人工确认处理方式")
+                    tail = data[-64:]
+            return [name for name, _ in sheets]
+    except zipfile.BadZipFile as exc:
+        raise ValueError("XLSX ZIP 结构无效或损坏") from exc
+
+
 def _unsafe_csv_formula_text(value):
     candidate = value.lstrip()
     leading = value[:len(value) - len(candidate)]
@@ -115,25 +206,36 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
     separator=delimiter if delimiter is not None else ('\t' if text_format=='.tsv' else ',')
     csv_to_xlsx = src in ('.csv','.tsv') and dst=='.xlsx'
     if csv_to_xlsx and os.path.getsize(source)>MAX_CSV_BYTES:raise ValueError('CSV 文件超过 100 MiB 上限')
+    xlsx_to_csv = src=='.xlsx' and dst in ('.csv','.tsv')
+    if xlsx_to_csv:
+        xlsx_sheetnames=_inspect_xlsx_archive(source,sheet)
     before=sha(source)
     csv_row_count = csv_column_count = None
     if csv_to_xlsx:
         if encoding not in ('utf-8','utf-8-sig','utf-16','gb18030','gbk'):raise ValueError('不支持该编码，请确认实际编码')
         w,csv_row_count,csv_column_count=_csv_to_write_only_workbook(source,encoding,separator,expected_columns)
         rows=None
-    elif src=='.xlsx' and dst in ('.csv','.tsv'):
-        w=load_workbook(source,read_only=False,data_only=False)
+    elif xlsx_to_csv:
+        w=load_workbook(source,read_only=True,data_only=False)
         try:
-            if sheet is None and len(w.sheetnames)!=1:raise ValueError('多个工作表，请指定 --sheet')
-            if sheet is not None and sheet not in w.sheetnames:raise ValueError('指定的工作表不存在')
             ws=w[sheet] if sheet else w.active
-            if ws.merged_cells.ranges:raise ValueError('存在合并单元格，请先人工确认处理方式')
-            if ws.max_row*ws.max_column>1000000:raise ValueError('表格范围过大，请缩小范围')
+            # Ignore an incorrect declared dimension so actual cells are not silently omitted.
+            ws.reset_dimensions()
             rows=[]
+            row_count=0
+            cell_count=0
             for row in ws.iter_rows():
+                if len(row)>16384:
+                    raise ValueError('工作表列数超过 Excel 容量')
+                row_count+=1
+                cell_count+=len(row)
+                if row_count>1048576 or cell_count>1000000:
+                    raise ValueError('表格范围过大，请缩小范围（最多 100 万个单元格）')
                 line=[]
                 for c in row:
                     if c.data_type in ('f','e'):raise ValueError('存在公式或错误值，不能安全转为 CSV')
+                    if isinstance(c.value,str) and len(c.value)>32767:
+                        raise ValueError(f'{c.coordinate} 的文本超过 Excel 单元格容量')
                     if (c.data_type=='d' or (c.data_type=='n' and c.value is not None and c.number_format.lower()!='general')) and not allow_display_loss:
                         raise ValueError(f'{c.coordinate} 的数字或日期显示依赖格式；CSV 无法保存显示格式。请核对原表，如接受导出底层值可指定 --allow-display-loss')
                     v='' if c.value is None else str(c.value)
