@@ -24,10 +24,17 @@ def contains_number(text):
             and any(char in CHINESE_NUMBER_UNITS for char in text))
 
 
-def sha(path):
+def sha(path, max_bytes=MAX_DOCX_BYTES):
+    if os.path.getsize(path) > max_bytes:
+        raise ValueError("DOCX 文件超过 100 MiB 上限")
     h = hashlib.sha256()
+    total = 0
     with open(path, "rb") as f:
-        for b in iter(lambda: f.read(1048576), b""): h.update(b)
+        for b in iter(lambda: f.read(1048576), b""):
+            total += len(b)
+            if total > max_bytes:
+                raise ValueError("DOCX 文件在读取期间超过 100 MiB 上限")
+            h.update(b)
     return h.hexdigest()
 
 def extract(path):
@@ -109,7 +116,7 @@ def run(source, output):
     if os.path.lexists(output):
         raise FileExistsError(output)
 
-    before = sha(source)
+    before = sha(source, MAX_DOCX_BYTES)
     rows = extract(source)
     wb = Workbook()
     fd, temporary = tempfile.mkstemp(
@@ -144,7 +151,7 @@ def run(source, output):
         finally:
             wb.close()
 
-        if sha(source) != before:
+        if sha(source, MAX_DOCX_BYTES) != before:
             raise ValueError("输入处理期间发生变化，结果不可交付")
         check = load_workbook(temporary, read_only=True, data_only=False)
         try:
