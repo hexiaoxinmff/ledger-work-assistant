@@ -4,10 +4,12 @@ import importlib.util
 import json
 from pathlib import Path
 import socket
+import struct
 import sys
 import tempfile
 import types
 import unittest
+import zlib
 from unittest import mock
 from types import SimpleNamespace
 
@@ -37,11 +39,67 @@ EXPECTED_PARAMS = {
 
 
 class ImageOutputSafety(unittest.TestCase):
+    def png_bytes(self, width=1, height=1):
+        def chunk(kind, payload):
+            crc = zlib.crc32(kind + payload) & 0xFFFFFFFF
+            return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", crc)
+        ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+        pixels = zlib.compress(b"\\x00\\x00\\x00\\x00\\x00")
+        return b"\\x89PNG\\r\\n\\x1a\\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", pixels) + chunk(b"IEND", b"")
+
     def fixture(self, directory):
         source = directory / "synthetic.png"
-        source.write_bytes(b"synthetic image bytes")
+        source.write_bytes(self.png_bytes())
         output = directory / "recognition.json"
         return source, output
+
+    def test_header_preflight_accepts_png_and_jpeg_dimensions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            png = directory / "sample.png"
+            png.write_bytes(self.png_bytes(400, 300))
+            self.assertEqual(MODULE._preflight_image(png), {"width": 400, "height": 300})
+
+            jpeg = directory / "sample.jpg"
+            frame = bytes([8]) + struct.pack(">HH", 240, 320) + bytes([3, 1, 0x11, 0, 2, 0x11, 0, 3, 0x11, 0])
+            jpeg.write_bytes(b"\\xff\\xd8\\xff\\xc0" + struct.pack(">H", len(frame) + 2) + frame)
+            self.assertEqual(MODULE._preflight_image(jpeg), {"width": 320, "height": 240})
+
+    def test_file_size_limit_is_enforced(self):
+        MODULE._check_image_size(MODULE.MAX_IMAGE_BYTES)
+        with self.assertRaisesRegex(ValueError, "100 MiB"):
+            MODULE._check_image_size(MODULE.MAX_IMAGE_BYTES + 1)
+
+    def test_oversized_pixel_dimensions_are_rejected_before_runtime(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source = directory / "oversized.png"
+            source.write_bytes(self.png_bytes(5001, 5000))
+            output = directory / "recognition.json"
+            with (
+                mock.patch.object(MODULE, "check_runtime") as runtime,
+                mock.patch.object(MODULE, "_recognize_without_python_socket_access") as recognize,
+            ):
+                with self.assertRaisesRegex(ValueError, "2500 万像素"):
+                    MODULE.run(source, output)
+            runtime.assert_not_called()
+            recognize.assert_not_called()
+            self.assertFalse(output.exists())
+
+    def test_invalid_or_mismatched_image_header_is_rejected_before_runtime(self):
+        jpeg_header = b"\\xff\\xd8\\xff\\xc0\\x00\\x11" + bytes([8]) + struct.pack(">HH", 1, 1) + bytes([3, 1, 0x11, 0, 2, 0x11, 0, 3, 0x11, 0])
+        cases = (("fake.png", b"not an image"), ("jpeg.png", jpeg_header))
+        for name, content in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                source = directory / name
+                source.write_bytes(content)
+                output = directory / "recognition.json"
+                with mock.patch.object(MODULE, "check_runtime") as runtime:
+                    with self.assertRaises(ValueError):
+                        MODULE.run(source, output)
+                runtime.assert_not_called()
+                self.assertFalse(output.exists())
 
     def fake_ocr(self, *, observed_socket_methods=None, observed_params=None):
         package = types.ModuleType("rapidocr")
