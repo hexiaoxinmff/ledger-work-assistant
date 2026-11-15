@@ -144,7 +144,7 @@ def match_composite(left_leftover: list[StdRow], right_leftover: list[StdRow],
         matched_r.add(r.row_id)
         outcomes.append(MatchOutcome(
             Status.AUTO_MATCHED, left=left_row, right=r,
-            amount_diff=(left_row.amount or Decimal(0)) - (r.amount or Decimal(0)),
+            amount_diff=subtract_exact(left_row.amount or Decimal(0), r.amount or Decimal(0)),
             rule="复合键唯一一致"))
     l_rest = [r for r in left_leftover if r.row_id not in matched_l]
     r_rest = [r for r in right_leftover if r.row_id not in matched_r]
