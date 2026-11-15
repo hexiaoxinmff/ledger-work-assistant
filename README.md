@@ -52,7 +52,7 @@ python ledger-organizer/tools/format-conversion/convert_table.py ledger-organize
 
 ## 本地图片 OCR 实验
 
-包内提供单张图片识别脚本 `ledger-organizer/tools/local-ocr/recognize_image.py`，使用预先安装的指定 RapidOCR/ONNX Runtime 和通过哈希检查的模型；项目不含模型、不自动安装下载。输出识别文本、位置及待人工复核状态，不自动填账或恢复表格。仅供虚构样例测试，完整限制见 `ledger-organizer/references/local-ocr.md`。
+包内提供单图识别脚本及 `prepare_models.py`。使用者显式运行准备脚本时，它会在已安装 RapidOCR 的 models 目录中下载三份固定模型并校验 SHA-256；不安装依赖、不创建目录、不覆盖已有文件。识别结果保留原文、位置和待人工复核状态；GitHub Actions 会用临时生成的虚构数字图像运行固定真实模型冒烟测试。完整限制见 `ledger-organizer/references/local-ocr.md`。
 
 虚构 OCR 输出可用 `ledger-organizer/tools/local-ocr/evaluate_accuracy.py` 与真值清单评分，统计金额/日期/编号的完全匹配率、CER 和漏/多识别行；评分结果仍全部待人工复核，不能用于确认真实数据。
 
