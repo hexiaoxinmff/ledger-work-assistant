@@ -113,6 +113,24 @@ class CollectReviewProvenance(unittest.TestCase):
             self.assertFalse(output.exists())
             self.assertEqual(list(directory.glob(".ledger-review-*")), [])
 
+    def test_collector_rejects_grid_fragment_not_matching_ocr_source(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            pdf, pages, review = self.prepare(directory)
+            ocr = pages / "page_0001_ocr.json"
+            data = json.loads(ocr.read_text(encoding="utf8"))
+            data["结果"][0]["识别文本"] = "00043"
+            ocr.write_text(json.dumps(data, ensure_ascii=False), encoding="utf8")
+            grid = pages / "page_0001_grid.json"
+            grid_data = json.loads(grid.read_text(encoding="utf8"))
+            grid_data["OCR结果sha256"] = sha(ocr)
+            grid.write_text(json.dumps(grid_data, ensure_ascii=False), encoding="utf8")
+            output = directory / "collected.xlsx"
+            with self.assertRaisesRegex(ValueError, "网格片段与来源 OCR 原始结果不一致"):
+                COLLECT.run(pdf, pages, review, output)
+            self.assertFalse(output.exists())
+
+
     def test_collector_requires_unassigned_fragments_to_be_resolved_upstream(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
