@@ -7,6 +7,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+
+import pymupdf
 from unittest.mock import patch
 
 from openpyxl import load_workbook
@@ -72,6 +74,51 @@ class PdfTextToExcel(unittest.TestCase):
             [match.group(0) for match in module.NUMBER.finditer(text)],
             ["人民币叁佰伍拾元整", "三百五十元", "负壹仟贰佰元整", "三万零五百", "人民币1,234.56元整", "负100元"],
         )
+
+    def test_pdfium_extracts_real_chinese_cid_font_amount_text(self):
+        lines = [
+            "金额人民币叁佰伍拾元整",
+            "欠款人民币1,234.56元整",
+            "第十二项",
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source, output = directory / "synthetic-cjk-font.pdf", directory / "review.xlsx"
+            document = pymupdf.open()
+            page = document.new_page()
+            for line_number, line in enumerate(lines):
+                page.insert_text(
+                    (72, 72 + line_number * 24),
+                    line,
+                    fontname="china-s",
+                    fontsize=12,
+                )
+            document.save(source)
+            document.close()
+            before = hashlib.sha256(source.read_bytes()).hexdigest()
+
+            result = module.run(source, output)
+            self.assertEqual(result["pages"], 1)
+            self.assertEqual(result["number_candidates"], 2)
+            self.assertEqual(result["source_sha256"], before)
+            self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(), before)
+
+            workbook = load_workbook(output, read_only=True, data_only=False)
+            try:
+                raw = list(workbook["页面原文"].values)
+                extracted = "".join(row[4] for row in raw[1:])
+                for line in lines:
+                    self.assertIn(line, extracted)
+                candidates = list(workbook["数字候选"].values)[1:]
+                by_text = {row[2]: row for row in candidates}
+                expected = ["人民币叁佰伍拾元整", "人民币1,234.56元整"]
+                self.assertEqual(set(by_text), set(expected))
+                for phrase in expected:
+                    self.assertEqual(by_text[phrase][1], extracted.index(phrase))
+                    self.assertEqual(by_text[phrase][9], "待人工逐字符核对原页")
+                    self.assertIsNotNone(by_text[phrase][4])
+            finally:
+                workbook.close()
 
     def test_chinese_amount_candidates_survive_pdf_export_with_offsets_and_review_state(self):
         text = "金额人民币叁佰伍拾元整，欠款人民币1,234.56元整；第十二项"
