@@ -108,6 +108,9 @@ def _extract(pdf_path):
             try:
                 text_page = page.get_textpage()
                 text = _safe_text(_normalize_line_endings(text_page.get_text_bounded()))
+                total_chars += len(text)
+                if total_chars > MAX_TOTAL_CHARS:
+                    raise ValueError(f"PDF 文字层超过 {MAX_TOTAL_CHARS} 个字符的安全处理上限")
                 candidates = []
                 for match in NUMBER.finditer(text):
                     start, end = match.span()
@@ -118,9 +121,6 @@ def _extract(pdf_path):
                 if text_page is not None:
                     text_page.close()
                 page.close()
-            total_chars += len(text)
-            if total_chars > MAX_TOTAL_CHARS:
-                raise ValueError(f"PDF 文字层超过 {MAX_TOTAL_CHARS} 个字符的安全处理上限")
             has_text = bool(text.strip())
             any_text = any_text or has_text
             pages.append({"page": page_number, "text": text, "has_text": has_text, "candidates": candidates})
