@@ -5,10 +5,17 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.cell import WriteOnlyCell
 
 
-def sha(path):
+def sha(path, max_bytes=None):
+    if max_bytes is not None and os.path.getsize(path)>max_bytes:
+        raise ValueError('源文件超过大小上限，未开始哈希')
     h=hashlib.sha256()
+    total=0
     with open(path,'rb') as f:
-        for chunk in iter(lambda:f.read(1048576),b''):h.update(chunk)
+        for chunk in iter(lambda:f.read(1048576),b''):
+            total+=len(chunk)
+            if max_bytes is not None and total>max_bytes:
+                raise ValueError('源文件在哈希期间超过大小上限')
+            h.update(chunk)
     return h.hexdigest()
 
 
@@ -265,7 +272,9 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
     xlsx_to_csv = src=='.xlsx' and dst in ('.csv','.tsv')
     if xlsx_to_csv:
         xlsx_sheetnames=_inspect_xlsx_archive(source,sheet)
-    before=sha(source)
+    if not csv_to_xlsx and not xlsx_to_csv:raise ValueError('仅支持 CSV/TSV 与 XLSX 互转')
+    input_limit=MAX_CSV_BYTES if csv_to_xlsx else MAX_XLSX_BYTES
+    before=sha(source,input_limit)
     csv_row_count = csv_column_count = None
     if csv_to_xlsx:
         if encoding not in ('utf-8','utf-8-sig','utf-16','gb18030','gbk'):raise ValueError('不支持该编码，请确认实际编码')
@@ -337,7 +346,7 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
                         raise ValueError('转换后回读不一致')
                 elif list(reader)!=rows:
                     raise ValueError('转换后回读不一致')
-        if sha(source)!=before:raise ValueError('源文件发生变化，结果不可交付')
+        if sha(source,input_limit)!=before:raise ValueError('源文件发生变化，结果不可交付')
         os.link(tempname,output)
     finally:os.unlink(tempname)
     return csv_row_count if csv_to_xlsx else (xlsx_row_count if xlsx_to_csv else len(rows))
