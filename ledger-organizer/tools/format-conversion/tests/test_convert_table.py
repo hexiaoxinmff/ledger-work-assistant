@@ -52,7 +52,7 @@ class ConvertTable(unittest.TestCase):
  def test_text_identifier_roundtrip_and_formula_guard(self):
   with tempfile.TemporaryDirectory() as tmp:
    d=Path(tmp);csv_in=d/'input.csv';xlsx=d/'middle.xlsx';csv_out=d/'output.csv'
-   rows=[['编号','金额'],['001234567890123456789','12.30'],['00042','-12.00'],['00043','-1,234.56']]
+   rows=[['编号','金额'],['001234567890123456789','12.30'],['00042','-12.00'],['00043','-1,234.56'],['00044','－１，２３４．５６']]
    with csv_in.open('w',encoding='utf-8-sig',newline='') as f:csv.writer(f).writerows(rows)
    module.run(str(csv_in),str(xlsx))
    w=load_workbook(xlsx);self.assertEqual(w.active['A2'].value,rows[1][0]);self.assertEqual(w.active['A2'].data_type,'s');w.close()
@@ -74,6 +74,8 @@ class ConvertTable(unittest.TestCase):
     self.assertEqual(list(d.glob('.ledger-conversion-*')),[])
   self.assertFalse(module._unsafe_csv_formula_text('-12.00'))
   self.assertFalse(module._unsafe_csv_formula_text('-1,234.56'))
+  self.assertFalse(module._unsafe_csv_formula_text('－１，２３４．５６'))
+  self.assertTrue(module._unsafe_csv_formula_text('－１，２３'))
   self.assertTrue(module._unsafe_csv_formula_text('-1,23'))
   self.assertFalse(module._unsafe_csv_formula_text('  -12.00'))
   self.assertFalse(module._unsafe_csv_formula_text('Amount =1+1'))
