@@ -41,6 +41,26 @@ class SpecialContent(unittest.TestCase):
                 self.assertEqual(workbook['表格1']['A1'].data_type,'s')
             finally:workbook.close()
 
+    def test_chinese_financial_amounts_enter_numeric_review_but_ordinal_does_not(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source, output = directory / "source.docx", directory / "review.xlsx"
+            rows = ["壹仟贰佰元整", "三百五十元", "第一项"]
+            table = "<w:tbl>" + "".join(
+                "<w:tr><w:tc><w:p><w:r><w:t>" + value +
+                "</w:t></w:r></w:p></w:tc></w:tr>" for value in rows
+            ) + "</w:tbl>"
+            document(source, table)
+            self.assertEqual(converter.run(source, output), 3)
+            workbook = load_workbook(output, read_only=True, data_only=False)
+            try:
+                audit = list(workbook["数字复核"].values)[1:]
+                self.assertEqual([row[3] for row in audit], rows[:2])
+                self.assertTrue(all(row[4] == "待人工复核" for row in audit))
+                self.assertEqual([row[0] for row in workbook["表格1"].iter_rows(min_col=1, max_col=1, values_only=True)], rows)
+            finally:
+                workbook.close()
+
     def test_failed_conversion_never_publishes_unverified_output(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory=Path(temporary);source=directory/'source.docx';output=directory/'output.xlsx'
