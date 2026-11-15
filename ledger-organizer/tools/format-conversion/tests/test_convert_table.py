@@ -94,11 +94,11 @@ class ConvertTable(unittest.TestCase):
     with self.assertRaisesRegex(ValueError,'simulated xlsx readback failure'):module.run(str(csv_source),str(xlsx_output))
    self.assertFalse(xlsx_output.exists());self.assertEqual(list(directory.glob('.ledger-conversion-*.tmp')),[])
    real_sha=module.sha;source_checks=[]
-   def changed_source(path):
+   def changed_source(path,max_bytes=None):
     if Path(path).resolve()==csv_source.resolve():
      source_checks.append(1)
      if len(source_checks)==2:return 'changed'
-    return real_sha(path)
+    return real_sha(path,max_bytes)
    with patch.object(module,'sha',side_effect=changed_source):
     with self.assertRaisesRegex(ValueError,'源文件发生变化'):module.run(str(csv_source),str(xlsx_output))
    self.assertFalse(xlsx_output.exists());self.assertEqual(list(directory.glob('.ledger-conversion-*.tmp')),[])
@@ -200,6 +200,28 @@ class ConvertTable(unittest.TestCase):
     with self.assertRaisesRegex(ValueError,'100 MiB'):module.run(str(ordinary),str(output))
     loader.assert_not_called()
    self.assertFalse(output.exists())
+
+ def test_source_size_limits_run_before_hashing(self):
+  cases=[("input.csv","MAX_CSV_BYTES"),("input.xlsx","MAX_XLSX_BYTES")]
+  for filename,limit_name in cases:
+   with self.subTest(filename=filename),tempfile.TemporaryDirectory() as temporary:
+    directory=Path(temporary);source=directory/filename
+    source.write_bytes(b"larger than one byte")
+    output=directory/("output.xlsx" if filename.endswith(".csv") else "output.csv")
+    with patch.object(module,limit_name,1):
+     with patch.object(module,"sha") as digest:
+      with self.assertRaisesRegex(ValueError,"超过"):
+       module.run(str(source),str(output))
+      digest.assert_not_called()
+    self.assertFalse(output.exists())
+
+ def test_sha_rejects_growth_after_initial_size_check(self):
+  with tempfile.TemporaryDirectory() as temporary:
+   source=Path(temporary)/"changed.csv"
+   source.write_bytes(b"larger than one byte")
+   with patch.object(module.os.path,"getsize",return_value=1):
+    with self.assertRaisesRegex(ValueError,"哈希期间超过"):
+     module.sha(source,max_bytes=1)
 
  def test_xlsx_to_csv_streams_rows_and_verifies_roundtrip(self):
   with tempfile.TemporaryDirectory() as tmp:
