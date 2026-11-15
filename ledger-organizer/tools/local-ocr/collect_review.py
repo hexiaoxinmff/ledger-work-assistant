@@ -46,8 +46,7 @@ def run(pdf,pages_dir,reviewed,output):
    raise ValueError('网格数据无效或缺少完整 OCR 片段计数')
   ocr_status=o.get('识别状态')
   if ocr_status is None:ocr_status='旧版 OCR 缺少识别状态；不能据此判断原图空白，需人工查看'
-  grid_status=g.get('OCR识别状态')
-  if grid_status is None:grid_status='旧版 OCR 网格缺少识别状态；不能据此判断原图空白，需人工查看'
+  grid_status=g.get('OCR识别状态',ocr_status)
   if not isinstance(ocr_status,str) or not ocr_status.strip() or grid_status!=ocr_status:raise ValueError('OCR 识别状态与网格状态不一致')
   if ocr_count==0 and not ocr_status.startswith(('未检出','旧版 OCR')):raise ValueError('零条 OCR 结果状态不匹配')
   if ocr_count>0 and not ocr_status.startswith(('已检出','旧版 OCR')):raise ValueError('非空 OCR 结果状态不匹配')
