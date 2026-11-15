@@ -82,6 +82,29 @@ class GridOutputSafety(unittest.TestCase):
             self.assertEqual(data["未归属片段"][0]["模型分数"], 0.61)
             self.assertEqual(list(directory.glob(".ledger-grid-*")), [])
 
+    def test_no_detection_status_survives_grid_and_single_image_review(self):
+        from openpyxl import load_workbook
+        with tempfile.TemporaryDirectory() as temporary:
+            directory=Path(temporary);image=directory/"blank-table.png";image.write_bytes(b"synthetic")
+            ocr=directory/"no-detections.json"
+            status="未检出文字候选；不能据此判断原图空白，需人工查看"
+            ocr.write_text(json.dumps({
+                "来源sha256":sha(image),"识别状态":status,"识别条数":0,"结果":[],
+            },ensure_ascii=False),encoding="utf8")
+            grid_json=directory/"grid.json";review=directory/"review.xlsx"
+            self.map_fake(image,ocr,grid_json)
+            grid_data=json.loads(grid_json.read_text(encoding="utf8"))
+            self.assertEqual(grid_data["OCR识别条数"],0)
+            self.assertEqual(grid_data["OCR识别状态"],status)
+            EXPORT.run(image,grid_json,review)
+            workbook=load_workbook(review,read_only=True,data_only=False)
+            try:
+                self.assertEqual(workbook["说明"]["B7"].value,status)
+                self.assertEqual(workbook["待核对表格"]["A1"].value,"")
+                self.assertEqual(workbook["逐格复核"]["E2"].value,"待人工核对原图")
+            finally:
+                workbook.close()
+
     def test_invalid_ocr_scores_stop_grid_mapping(self):
         import math
         for score in (None, -0.1, 1.1, "0.9", math.nan, True):
@@ -144,6 +167,7 @@ class GridOutputSafety(unittest.TestCase):
                 missing=list(workbook["未归属片段"].values)
                 self.assertEqual(missing[1][0:4],(1,2,"跨界文字",0.61))
                 self.assertIn("模型分数只作参考",workbook["来源"]["B5"].value)
+                self.assertIn("不能据此判断原图空白",workbook["来源"]["B8"].value)
             finally:
                 workbook.close()
             self.assertEqual(list(directory.glob(".ledger-pdf-review-*")),[])
