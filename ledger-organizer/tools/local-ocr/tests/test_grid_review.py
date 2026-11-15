@@ -1,11 +1,13 @@
 """Synthetic grid mapping tests; no real OCR or network required."""
-import hashlib, importlib.util, json, tempfile, unittest
+import hashlib, importlib.util, json, tempfile, unittest, sys
 from pathlib import Path
 import cv2
 import numpy as np
 from openpyxl import load_workbook
 
 HERE=Path(__file__).resolve().parent.parent
+if str(HERE) not in sys.path:
+ sys.path.insert(0,str(HERE))
 
 def load(name):
     spec=importlib.util.spec_from_file_location(name,HERE/(name+'.py'))

@@ -1,15 +1,38 @@
 """Experimental grid-cell mapping for ONE simple straight-line table image."""
 import argparse, hashlib, json, math, os, tempfile
+from image_preflight import MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS, preflight_image
 from pathlib import Path
 import cv2
 import numpy as np
 
+MAX_OCR_JSON_BYTES = 25 * 1024 * 1024
+MAX_OCR_RESULTS = 100_000
 
-def sha(path):
+
+def sha(path, max_bytes=MAX_IMAGE_BYTES):
     h=hashlib.sha256()
+    total=0
     with open(path,'rb') as f:
-        for b in iter(lambda:f.read(1048576),b''):h.update(b)
+        for b in iter(lambda:f.read(1048576),b''):
+            total += len(b)
+            if total > max_bytes:
+                raise ValueError('输入文件在读取期间超过大小上限')
+            h.update(b)
     return h.hexdigest()
+
+
+def read_bounded(path, max_bytes, label="文件"):
+    chunks=[]
+    total=0
+    with open(path,'rb') as f:
+        while total <= max_bytes:
+            chunk=f.read(min(1048576, max_bytes + 1 - total))
+            if not chunk:break
+            chunks.append(chunk)
+            total += len(chunk)
+    if total > max_bytes:
+        raise ValueError(f'{label} 超过读取上限')
+    return b''.join(chunks)
 
 
 def _validated_ocr_box(box, width, height):
@@ -49,7 +72,7 @@ def clusters(indices):
 
 def lines(img):
     gray=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY);h,w=gray.shape
-    if min(h,w)<60 or h*w>30000000:raise ValueError('图片尺寸超出实验范围')
+    if min(h,w)<60 or h*w>MAX_IMAGE_PIXELS:raise ValueError('图片尺寸超出实验范围')
     binary=cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)[1]
     hm=cv2.morphologyEx(binary,cv2.MORPH_OPEN,cv2.getStructuringElement(cv2.MORPH_RECT,(max(20,w//20),1)))
     vm=cv2.morphologyEx(binary,cv2.MORPH_OPEN,cv2.getStructuringElement(cv2.MORPH_RECT,(1,max(20,h//20))))
@@ -84,9 +107,15 @@ def map_table(image, ocrfile, output):
     if len({str(image),str(ocrfile),str(output)})<3 or output.suffix.lower()!='.json':raise ValueError('输入输出必须是不同文件，输出为 JSON')
     if not output.parent.is_dir():raise FileNotFoundError(f'输出目录不存在：{output.parent}')
     if os.path.lexists(output):raise FileExistsError(output)
-    imagehash=sha(image);ocrhash=sha(ocrfile);raw=json.loads(ocrfile.read_text(encoding='utf8'))
+    image_info=preflight_image(image)
+    if ocrfile.stat().st_size>MAX_OCR_JSON_BYTES:raise ValueError('OCR JSON 超过 25 MiB 上限')
+    imagehash=sha(image, MAX_IMAGE_BYTES)
+    ocr_bytes=read_bounded(ocrfile, MAX_OCR_JSON_BYTES, 'OCR JSON')
+    ocrhash=hashlib.sha256(ocr_bytes).hexdigest()
+    raw=json.loads(ocr_bytes.decode('utf8'))
     results=raw.get('结果')
     if raw.get('来源sha256')!=imagehash or not isinstance(results,list):raise ValueError('OCR 结果与原图哈希不一致或格式无效')
+    if len(results)>MAX_OCR_RESULTS:raise ValueError('OCR 结果超过 10 万条上限')
     ocr_count=raw.get('识别条数',len(results))
     if type(ocr_count) is not int or ocr_count!=len(results):raise ValueError('OCR 识别条数与结果列表不一致')
     ocr_status=raw.get('识别状态')
@@ -98,8 +127,11 @@ def map_table(image, ocrfile, output):
         raise ValueError('零条 OCR 结果必须标记为未检出候选或旧版状态未知')
     if ocr_count>0 and not ocr_status.startswith(('已检出','旧版 OCR')):
         raise ValueError('非空 OCR 结果的识别状态不匹配')
-    arr=np.fromfile(str(image),dtype=np.uint8);img=cv2.imdecode(arr,cv2.IMREAD_COLOR)
+    image_bytes=read_bounded(image, MAX_IMAGE_BYTES, '图片')
+    if hashlib.sha256(image_bytes).hexdigest()!=imagehash:raise ValueError('图片在处理期间发生变化')
+    arr=np.frombuffer(image_bytes,dtype=np.uint8);img=cv2.imdecode(arr,cv2.IMREAD_COLOR)
     if img is None:raise ValueError('无法读取图片')
+    if img.shape[1]!=image_info['width'] or img.shape[0]!=image_info['height']:raise ValueError('图片头尺寸与解码尺寸不一致')
     xs,ys=lines(img);cells=[]
     for ri,(y1,y2) in enumerate(zip(ys,ys[1:]),1):
         for ci,(x1,x2) in enumerate(zip(xs,xs[1:]),1):cells.append({'行':ri,'列':ci,'边界_像素':[x1,y1,x2,y2],'片段':[],'复核状态':'待人工核对原图'})
@@ -127,7 +159,7 @@ def map_table(image, ocrfile, output):
     data={'用途':'仅虚构样例，自动网格及所有识别结果均须人工复核；空白格不代表原图为空',
           '来源文件名':image.name,'来源sha256':imagehash,'OCR结果sha256':ocrhash,
           '行数':len(ys)-1,'列数':len(xs)-1,'OCR识别条数':ocr_count,'OCR识别状态':ocr_status,'单元格':cells,'未归属片段':unassigned}
-    if sha(image)!=imagehash or sha(ocrfile)!=ocrhash:raise ValueError('输入文件在处理期间发生变化')
+    if sha(image, MAX_IMAGE_BYTES)!=imagehash or sha(ocrfile, MAX_OCR_JSON_BYTES)!=ocrhash:raise ValueError('输入文件在处理期间发生变化')
     fd,temporary=tempfile.mkstemp(prefix='.ledger-grid-',suffix='.json.tmp',dir=output.parent)
     try:
         with os.fdopen(fd,'w',encoding='utf8') as stream:
@@ -135,7 +167,7 @@ def map_table(image, ocrfile, output):
             stream.flush();os.fsync(stream.fileno())
         with open(temporary,encoding='utf8') as stream:
             if json.load(stream)!=data:raise ValueError('网格 JSON 暂存结果回读不一致')
-        if sha(image)!=imagehash or sha(ocrfile)!=ocrhash:raise ValueError('输入文件在处理期间发生变化')
+        if sha(image, MAX_IMAGE_BYTES)!=imagehash or sha(ocrfile, MAX_OCR_JSON_BYTES)!=ocrhash:raise ValueError('输入文件在处理期间发生变化')
         os.link(temporary,output)
     finally:
         if os.path.exists(temporary):os.unlink(temporary)

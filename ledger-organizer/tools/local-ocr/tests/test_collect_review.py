@@ -3,6 +3,8 @@ import hashlib
 import importlib.util
 import json
 import sys
+import struct
+import zlib
 import tempfile
 import types
 import unittest
@@ -12,7 +14,17 @@ from unittest import mock
 from openpyxl import load_workbook
 
 HERE = Path(__file__).resolve().parents[1]
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
 
+
+
+
+def png_header(width=300, height=200):
+    kind = b"IHDR"
+    payload = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    crc = zlib.crc32(kind + payload) & 0xFFFFFFFF
+    return b"\x89PNG\r\n\x1a\n" + struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", crc)
 
 def load_grid():
     cv2 = types.ModuleType("cv2")
@@ -21,6 +33,7 @@ def load_grid():
     numpy = types.ModuleType("numpy")
     numpy.uint8 = object()
     numpy.fromfile = lambda *_args, **_kwargs: object()
+    numpy.frombuffer = lambda *_args, **_kwargs: object()
     spec = importlib.util.spec_from_file_location("collect_test_grid", HERE / "table_grid.py")
     module = importlib.util.module_from_spec(spec)
     with mock.patch.dict(sys.modules, {"cv2": cv2, "numpy": numpy}):
@@ -53,7 +66,7 @@ class CollectReviewProvenance(unittest.TestCase):
         pdf = directory / "source.pdf"
         pdf.write_bytes(b"synthetic PDF")
         image = pages / "page_0001.png"
-        image.write_bytes(b"synthetic page image")
+        image.write_bytes(png_header())
         image_hash = sha(image)
         ocr = pages / "page_0001_ocr.json"
         ocr.write_text(json.dumps({
