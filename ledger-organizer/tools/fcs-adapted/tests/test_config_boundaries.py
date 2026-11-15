@@ -9,13 +9,13 @@ from config import ConfigError, load_config
 
 
 class ConfigBoundaries(unittest.TestCase):
-    def load_with(self, match_options):
+    def load_with(self, match_options, left_header="0", right_header="0"):
         directory = Path(self.temporary.name)
         config_path = directory / "config.yaml"
         options = "\n".join(f"  {key}: {value}" for key, value in match_options.items())
         config_path.write_text(
-            "left:\n  file: left.csv\n  fields:\n    no: id\n    amount: amount\n"
-            "right:\n  file: right.csv\n  fields:\n    no: id\n    amount: amount\n"
+            "left:\n  file: left.csv\n  header_row: " + left_header + "\n  fields:\n    no: id\n    amount: amount\n"
+            "right:\n  file: right.csv\n  header_row: " + right_header + "\n  fields:\n    no: id\n    amount: amount\n"
             "match:\n  direction_rule: none\n" + options + "\n"
             "output:\n  path: result.xlsx\n",
             encoding="utf-8",
@@ -38,6 +38,16 @@ class ConfigBoundaries(unittest.TestCase):
                 cfg = self.load_with(options)
                 self.assertEqual(cfg.match.amount_scale, expected_scale)
                 self.assertEqual(cfg.match.date_tolerance_days, expected_days)
+
+    def test_header_row_requires_nonnegative_integer(self):
+        for value in ("0", "37"):
+            with self.subTest(valid=value):
+                cfg = self.load_with({}, left_header=value)
+                self.assertEqual(cfg.left.header_row, int(value))
+        for value in ("1.5", "true", "-1"):
+            with self.subTest(invalid=value):
+                with self.assertRaisesRegex(ConfigError, "header_row"):
+                    self.load_with({}, left_header=value)
 
     def test_fractional_boolean_negative_and_out_of_range_values_rejected(self):
         invalid = [

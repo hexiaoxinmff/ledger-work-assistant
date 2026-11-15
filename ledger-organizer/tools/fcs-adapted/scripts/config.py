@@ -56,7 +56,7 @@ class ReconcileConfig:
 _ALLOWED_MATCH_FIELDS = {"no", "amount", "date", "counterparty"}
 
 
-def _integer_setting(value: Any, name: str, minimum: int, maximum: int) -> int:
+def _integer_setting(value: Any, name: str, minimum: int, maximum: int | None) -> int:
     if isinstance(value, bool):
         raise ConfigError(f"{name} 必须是整数，不能是布尔值")
     if type(value) is int:
@@ -65,8 +65,9 @@ def _integer_setting(value: Any, name: str, minimum: int, maximum: int) -> int:
         parsed = int(value.strip())
     else:
         raise ConfigError(f"{name} 必须是整数，不能进行截断或隐式转换")
-    if not minimum <= parsed <= maximum:
-        raise ConfigError(f"{name} 必须在 {minimum} 至 {maximum} 之间")
+    if parsed < minimum or (maximum is not None and parsed > maximum):
+        bound = f"{minimum} 至 {maximum}" if maximum is not None else f"不小于 {minimum}"
+        raise ConfigError(f"{name} 必须为 {bound} 的整数")
     return parsed
 
 
@@ -114,7 +115,7 @@ def _table(raw: dict[str, Any], side: str) -> TableSpec:
             file=raw["file"],
             sheet=raw.get("sheet"),
             encoding=raw.get("encoding"),
-            header_row=int(raw.get("header_row", 0)),
+            header_row=_integer_setting(raw.get("header_row", 0), f"{side}.header_row", 0, None),
             fields=FieldMap(no=f["no"], amount=f["amount"], date=f.get("date"),
                             counterparty=f.get("counterparty"), direction=f.get("direction")),
         )
