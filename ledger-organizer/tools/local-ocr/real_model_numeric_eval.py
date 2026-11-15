@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 import tempfile
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from recognize_image import run
 from evaluate_accuracy import edit_distance, PENDING
@@ -33,6 +33,86 @@ CASES = [
     {"id": "negative-downsample-half", "suite": "image-variation", "condition": "downsampled to half dimensions", "field_type": "amount", "expected": "-1,234.56", "render": {"downsample_factor": 0.5}},
     {"id": "negative-light-blur", "suite": "image-variation", "condition": "Gaussian blur radius 0.8 px", "field_type": "amount", "expected": "-1,234.56", "render": {"blur_radius": 0.8}},
     {"id": "positive-small-control", "suite": "image-variation", "condition": "positive amount at font size 80 px", "field_type": "amount", "expected": "1,234.56", "render": {"font_size": 80}},
+    [
+        {
+            "id": "negative-low-contrast-preprocess-original",
+            "suite": "preprocess",
+            "condition": "gray text 150 on gray background 245; original",
+            "field_type": "amount",
+            "expected": "-1,234.56",
+            "render": {
+                "foreground_level": 150,
+                "background_level": 245
+            },
+            "preprocess_variant": "original",
+            "preprocess_base_case": "negative-low-contrast"
+        },
+        {
+            "id": "negative-low-contrast-preprocess-autocontrast",
+            "suite": "preprocess",
+            "condition": "gray text 150 on gray background 245; autocontrast",
+            "field_type": "amount",
+            "expected": "-1,234.56",
+            "render": {
+                "foreground_level": 150,
+                "background_level": 245
+            },
+            "preprocess_variant": "autocontrast",
+            "preprocess_base_case": "negative-low-contrast"
+        },
+        {
+            "id": "negative-low-contrast-preprocess-threshold-198",
+            "suite": "preprocess",
+            "condition": "gray text 150 on gray background 245; threshold-198",
+            "field_type": "amount",
+            "expected": "-1,234.56",
+            "render": {
+                "foreground_level": 150,
+                "background_level": 245
+            },
+            "preprocess_variant": "threshold-198",
+            "preprocess_base_case": "negative-low-contrast"
+        },
+        {
+            "id": "negative-jpeg-q40-preprocess-original",
+            "suite": "preprocess",
+            "condition": "JPEG quality 40; original",
+            "field_type": "amount",
+            "expected": "-1,234.56",
+            "render": {
+                "format": "JPEG",
+                "jpeg_quality": 40
+            },
+            "preprocess_variant": "original",
+            "preprocess_base_case": "negative-jpeg-q40"
+        },
+        {
+            "id": "negative-jpeg-q40-preprocess-autocontrast",
+            "suite": "preprocess",
+            "condition": "JPEG quality 40; autocontrast",
+            "field_type": "amount",
+            "expected": "-1,234.56",
+            "render": {
+                "format": "JPEG",
+                "jpeg_quality": 40
+            },
+            "preprocess_variant": "autocontrast",
+            "preprocess_base_case": "negative-jpeg-q40"
+        },
+        {
+            "id": "negative-jpeg-q40-preprocess-threshold-198",
+            "suite": "preprocess",
+            "condition": "JPEG quality 40; threshold-198",
+            "field_type": "amount",
+            "expected": "-1,234.56",
+            "render": {
+                "format": "JPEG",
+                "jpeg_quality": 40
+            },
+            "preprocess_variant": "threshold-198",
+            "preprocess_base_case": "negative-jpeg-q40"
+        }
+    ]
 ]
 
 
@@ -101,6 +181,22 @@ def _draw_case(case, destination):
         image.save(destination, format="PNG")
 
 
+
+def _preprocess_synthetic(source, destination, variant):
+    """Create a separate diagnostic image; never mutate the generated source."""
+    if variant == "original":
+        return Path(source)
+    with Image.open(source) as image:
+        grayscale = image.convert("L")
+        if variant == "autocontrast":
+            processed = ImageOps.autocontrast(grayscale)
+        elif variant == "threshold-198":
+            processed = grayscale.point(lambda value: 255 if value >= 198 else 0)
+        else:
+            raise ValueError("未知的合成预处理变体")
+        processed.convert("RGB").save(destination, format="PNG")
+    return Path(destination)
+
 def _bbox_envelope_overlaps(fragments):
     """Report axis-aligned envelope intersections; they do not prove glyph overlap."""
     overlaps = []
@@ -158,7 +254,15 @@ def evaluate():
             source = directory / f"synthetic-{index:02d}{_suffix(case)}"
             result_path = directory / f"recognition-{index:02d}.json"
             _draw_case(case, source)
-            run(source, result_path)
+            original_source_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+            variant = case.get("preprocess_variant")
+            ocr_source = _preprocess_synthetic(
+                source, directory / f"preprocessed-{index:02d}.png", variant
+            ) if variant else source
+            ocr_input_sha256 = hashlib.sha256(ocr_source.read_bytes()).hexdigest()
+            run(ocr_source, result_path)
+            if hashlib.sha256(source.read_bytes()).hexdigest() != original_source_sha256:
+                raise ValueError(f"{case['id']}: 合成原图在识别前后发生变化")
             data = json.loads(result_path.read_text(encoding="utf-8"))
             recognized_rows = data.get("结果")
             if not isinstance(recognized_rows, list):
@@ -195,7 +299,11 @@ def evaluate():
             distance = edit_distance(case["expected"], joined)
             rows.append({
                 **case,
-                "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                "source_sha256": original_source_sha256,
+                "original_source_sha256": original_source_sha256,
+                "ocr_input_sha256": ocr_input_sha256,
+                "preprocessing_variant": variant or "none",
+                "source_unchanged": hashlib.sha256(source.read_bytes()).hexdigest() == original_source_sha256,
                 "recognized_lines": recognized,
                 "recognized_fragments": fragments,
                 "fragment_count": len(fragments),
