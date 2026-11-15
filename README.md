@@ -4,7 +4,7 @@
 
 ## 安装和使用
 
-当前技能版本：v0.76。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
+当前技能版本：v0.77。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
 
 本机虚构回归入口：`python ledger-organizer/tools/run_checks.py`。默认执行基础环境/样例/转换/Word 提取测试；对账业务规则测试用 `--suite ledger`（需预装 pandas、openpyxl、PyYAML），PDF 文字层转表测试用 `--suite pdf-text`（需预装 pypdfium2、openpyxl），OCR 相关测试用 `--suite ocr`，全部用 `--suite all`。各组依赖须事先满足，报告保留失败、超时和未运行项目，不能将部分通过当成全功能通过。这些测试不包含真实账目、平台自主调用、界面或 OCR 准确率验收。
 
@@ -72,3 +72,6 @@ PDF 虚构样例复核表提供逐格人工选择和文本修正；可选工具�
 OCR 的合成图像条件测量还包含预处理诊断：仅比较临时生成图上的原图、自动对比度和固定阈值图像，记录两种输入哈希，不改写用户图片或自动应用处理。结果仅用于观察固定合成样例，不能证明真实资料识别改善。
 
 2026-11-15 合成预处理对比实测：低对比/JPEG 负数图原图与两种变换合计单框完全匹配 0/6，均发生拆框，未显示能可靠恢复完整金额的方案。因此技能不自动预处理真实图像；详情和限制见本地 OCR 说明。
+
+
+可搜索 PDF 数字候选现包含部分带数位或币值单位的中文金额原文，仍不作数值转换或准确性判断；普通序数不会仅因汉字数字列入候选。支持范围及边界见 PDF 转换说明。
