@@ -21,13 +21,18 @@ def _validated_ocr_box(box, width, height):
             raise ValueError('OCR 边界框必须使用二维坐标')
         x, y = point
         if (isinstance(x, bool) or isinstance(y, bool)
-                or not isinstance(x, (int, float)) or not isinstance(y, (int, float))
-                or not math.isfinite(x) or not math.isfinite(y)):
+                or not isinstance(x, (int, float)) or not isinstance(y, (int, float))):
+            raise ValueError('OCR 边界框坐标必须为有限数值')
+        try:
+            x, y = float(x), float(y)
+        except (OverflowError, ValueError) as exc:
+            raise ValueError('OCR 边界框坐标必须为有限数值') from exc
+        if not math.isfinite(x) or not math.isfinite(y):
             raise ValueError('OCR 边界框坐标必须为有限数值')
         if not (0 <= x <= width and 0 <= y <= height):
             raise ValueError('OCR 边界框坐标超出图片范围')
-        xs.append(float(x))
-        ys.append(float(y))
+        xs.append(x)
+        ys.append(y)
     if max(xs) <= min(xs) or max(ys) <= min(ys):
         raise ValueError('OCR 边界框面积无效')
     return xs, ys
@@ -103,7 +108,13 @@ def map_table(image, ocrfile, output):
         box=item.get('位置_像素');text=item.get('识别文本');score=item.get('模型分数')
         if not isinstance(box,list) or len(box)!=4 or not isinstance(text,str) or len(text)>32767:
             raise ValueError('OCR 识别框或文本格式无效')
-        if isinstance(score,bool) or not isinstance(score,(int,float)) or not math.isfinite(score) or not 0<=score<=1:
+        if isinstance(score, bool) or not isinstance(score, (int, float)):
+            raise ValueError('OCR 模型分数无效')
+        try:
+            score = float(score)
+        except (OverflowError, ValueError) as exc:
+            raise ValueError('OCR 模型分数无效') from exc
+        if not math.isfinite(score) or not 0 <= score <= 1:
             raise ValueError('OCR 模型分数无效')
         bx, by = _validated_ocr_box(box, img.shape[1], img.shape[0])
         matches=[c for c in cells if min(bx)>c['边界_像素'][0] and max(bx)<c['边界_像素'][2] and min(by)>c['边界_像素'][1] and max(by)<c['边界_像素'][3]]
