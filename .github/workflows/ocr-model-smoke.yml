@@ -37,10 +37,9 @@ jobs:
       - name: Install pinned OCR runtime for isolated CI
         run: python -m pip install rapidocr==3.10.0 onnxruntime==1.20.1 Pillow==13.0.0
       - name: Download fixed public model files and verify SHA-256
-        shell: bash
-        run: |
-          MODEL_DIR="$(python -c 'from pathlib import Path; import rapidocr; print(Path(rapidocr.__file__).resolve().parent / "models")')"
-          python ledger-organizer/tools/local-ocr/prepare_models.py --model-dir "$MODEL_DIR"
+        run: python ledger-organizer/tools/local-ocr/prepare_models.py
+      - name: Run offline model preparation safety tests
+        run: python -m unittest discover -s ledger-organizer/tools/local-ocr/tests -p test_prepare_models.py -v
       - name: Verify installed versions and model hashes
         run: python ledger-organizer/tools/local-ocr/recognize_image.py --check-runtime
       - name: Run real inference on a generated fictional number image
