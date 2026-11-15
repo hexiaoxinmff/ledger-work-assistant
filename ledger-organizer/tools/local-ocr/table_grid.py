@@ -9,7 +9,7 @@ MAX_OCR_JSON_BYTES = 25 * 1024 * 1024
 MAX_OCR_RESULTS = 100_000
 
 
-def sha(path, max_bytes):
+def sha(path, max_bytes=MAX_IMAGE_BYTES):
     h=hashlib.sha256()
     total=0
     with open(path,'rb') as f:
