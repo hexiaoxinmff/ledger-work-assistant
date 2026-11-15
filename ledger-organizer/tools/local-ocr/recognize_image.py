@@ -48,7 +48,7 @@ def _validate_dimensions(width, height):
 
 
 def _png_dimensions(stream):
-    if stream.read(8) != b"\\x89PNG\\r\\n\\x1a\\n":
+    if stream.read(8) != b"\x89PNG\\r\\n\x1a\\n":
         raise ValueError("文件内容与 PNG 格式不符")
     chunk = stream.read(25)
     if len(chunk) != 25:
@@ -64,7 +64,7 @@ def _png_dimensions(stream):
 
 
 def _jpeg_dimensions(stream):
-    if stream.read(2) != b"\\xff\\xd8":
+    if stream.read(2) != b"\xff\xd8":
         raise ValueError("文件内容与 JPEG 格式不符")
     sof_markers = {
         0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
@@ -75,12 +75,12 @@ def _jpeg_dimensions(stream):
         prefix = stream.read(1)
         if not prefix:
             break
-        if prefix != b"\\xff":
+        if prefix != b"\xff":
             raise ValueError("JPEG 图片头标记无效")
         marker_byte = stream.read(1)
-        while marker_byte == b"\\xff":
+        while marker_byte == b"\xff":
             marker_byte = stream.read(1)
-        if not marker_byte or marker_byte == b"\\x00":
+        if not marker_byte or marker_byte == b"\x00":
             raise ValueError("JPEG 图片头标记无效")
         marker = marker_byte[0]
         if marker in (0xD9, 0xDA):
@@ -99,8 +99,8 @@ def _jpeg_dimensions(stream):
         if marker in sof_markers:
             if payload_length < 5:
                 raise ValueError("JPEG 尺寸段不完整")
-            frame = stream.read(5)
-            if len(frame) != 5:
+            frame = stream.read(payload_length)
+            if len(frame) != payload_length:
                 raise ValueError("JPEG 尺寸段不完整")
             height, width = struct.unpack(">HH", frame[1:5])
             return width, height
