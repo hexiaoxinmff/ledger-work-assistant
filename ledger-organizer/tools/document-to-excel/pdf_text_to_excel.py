@@ -24,7 +24,7 @@ NUMBER = re.compile(
     r"[+\-−－]?\s*(?:\d{1,3}(?:,\d{3})+|\d{1,3}(?:，\d{3})+|\d+)(?:[.．]\d+)?)(?:%|％)?(?![\w.,，．])"
     rf"|(?<!第)(?<![{CJK_NUMERAL_CHARS}])(?:人民币)?[正负]?"
     rf"(?=[{CJK_NUMERAL_CHARS}]*[{CJK_AMOUNT_UNITS}])[{CJK_NUMERAL_CHARS}]+"
-    r"(?:元|圆|圓|块|角|毛|分|整)?"
+    r"(?:元|圆|圓|块|角|毛|分)?(?:整)?"
     rf"(?![{CJK_NUMERAL_CHARS}])"
 )
 
