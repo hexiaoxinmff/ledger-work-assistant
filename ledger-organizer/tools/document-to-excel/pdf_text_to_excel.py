@@ -14,6 +14,7 @@ import pypdfium2 as pdfium
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font
 
+MAX_PDF_BYTES = 100 * 1024 * 1024
 MAX_PAGES = 200
 MAX_TOTAL_CHARS = 500_000
 TEXT_CHUNK = 30_000
@@ -32,10 +33,20 @@ NUMBER = re.compile(
 )
 
 
-def sha256(path):
+def check_pdf_size(path, max_bytes=MAX_PDF_BYTES):
+    if os.path.getsize(path) > max_bytes:
+        raise ValueError("PDF 文件超过 100 MiB 上限")
+
+
+def sha256(path, max_bytes=MAX_PDF_BYTES):
+    check_pdf_size(path, max_bytes)
     digest = hashlib.sha256()
+    total = 0
     with open(path, "rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
+            total += len(block)
+            if total > max_bytes:
+                raise ValueError("PDF 文件在读取期间超过 100 MiB 上限")
             digest.update(block)
     return digest.hexdigest()
 
@@ -260,14 +271,15 @@ def run(source, output):
     if os.path.lexists(output):
         raise FileExistsError(output)
 
-    source_hash = sha256(source)
+    check_pdf_size(source, MAX_PDF_BYTES)
+    source_hash = sha256(source, MAX_PDF_BYTES)
     pages = _extract(source)
     fd, temporary = tempfile.mkstemp(prefix=".ledger-pdf-text-", suffix=".xlsx", dir=output.parent)
     try:
         with os.fdopen(fd, "wb") as stream:
             expected_rows = _write_workbook(stream, source.name, source_hash, pages)
         _verify_workbook(temporary, expected_rows)
-        if sha256(source) != source_hash:
+        if sha256(source, MAX_PDF_BYTES) != source_hash:
             raise ValueError("处理期间 PDF 源文件发生变化，结果不可发布")
         os.link(temporary, output)
     finally:
