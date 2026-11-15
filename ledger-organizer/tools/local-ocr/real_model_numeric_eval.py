@@ -44,6 +44,31 @@ def _draw_case(text, destination):
     image.save(destination, format="PNG")
 
 
+def _bbox_envelope_overlaps(fragments):
+    """Report intersections of axis-aligned envelopes; this is not glyph overlap proof."""
+    overlaps = []
+    for left_index, left in enumerate(fragments):
+        left_box = left["bbox_pixels"]
+        left_x = [point[0] for point in left_box]
+        left_y = [point[1] for point in left_box]
+        for right in fragments[left_index + 1:]:
+            right_box = right["bbox_pixels"]
+            right_x = [point[0] for point in right_box]
+            right_y = [point[1] for point in right_box]
+            x1 = max(min(left_x), min(right_x))
+            y1 = max(min(left_y), min(right_y))
+            x2 = min(max(left_x), max(right_x))
+            y2 = min(max(left_y), max(right_y))
+            if x1 < x2 and y1 < y2:
+                overlaps.append({
+                    "first_result_index": left["ocr_result_index"],
+                    "second_result_index": right["ocr_result_index"],
+                    "intersection_envelope_pixels": [x1, y1, x2, y2],
+                    "intersection_envelope_area_pixels": (x2 - x1) * (y2 - y1),
+                })
+    return overlaps
+
+
 def _publish_new_file(destination, payload):
     destination = Path(destination)
     if not destination.parent.is_dir():
@@ -112,6 +137,8 @@ def evaluate():
                 "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
                 "recognized_lines": recognized,
                 "recognized_fragments": fragments,
+                "fragment_count": len(fragments),
+                "axis_aligned_bbox_overlaps": _bbox_envelope_overlaps(fragments),
                 "recognized_joined_for_cer": joined,
                 "exact_match": len(recognized) == 1 and joined == case["expected"],
                 "edit_distance": distance,
@@ -123,6 +150,7 @@ def evaluate():
         "purpose": "仅测量固定 RapidOCR 模型对临时生成的虚构数字图像的识别表现；不代表真实资料准确率",
         "case_count": len(rows),
         "exact_matches": sum(row["exact_match"] for row in rows),
+        "multi_box_case_count": sum(row["fragment_count"] > 1 for row in rows),
         "exact_match_rate": sum(row["exact_match"] for row in rows) / len(rows),
         "character_error_rate": total_edits / total_chars if total_chars else 0.0,
         "review_required": True,
@@ -143,7 +171,8 @@ def main(argv=None):
     encoded = (json.dumps(report, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     _publish_new_file(args.output, encoded)
     print("## 合成数字识别测量（非准确率门禁）")
-    print(f"- 完全匹配：{report['exact_matches']}/{report['case_count']}")
+    print(f"- 单框完全匹配：{report['exact_matches']}/{report['case_count']}")
+    print(f"- 多框案例：{report['multi_box_case_count']}")
     print(f"- 字符错误率：{report['character_error_rate']:.4f}")
     print("- 结果状态：全部要求人工复核；分数不确认任何数字")
     print("| 类别 | 真值 | 识别结果 | 精确匹配 |")

@@ -18,10 +18,15 @@ SPEC.loader.exec_module(MODULE)
 PENDING = MODULE.PENDING
 
 
-def fake_run(source, result_path, invalid_review=False):
+def fake_run(source, result_path, invalid_review=False, fragmented_exact=False):
     index = int(Path(result_path).stem.rsplit("-", 1)[1])
     case = MODULE.CASES[index]
-    lines = ["1,234.56", "-1"] if case["id"] == "amount-negative" else [case["expected"]]
+    if case["id"] == "amount-negative" and fragmented_exact:
+        lines = ["-", "1,234.56"]
+    elif case["id"] == "amount-negative":
+        lines = ["1,234.56", "-1"]
+    else:
+        lines = [case["expected"]]
     if invalid_review and index == 0:
         status = "已确认"
     else:
@@ -31,8 +36,8 @@ def fake_run(source, result_path, invalid_review=False):
             "识别文本": line,
             "复核状态": status,
             "模型分数": 0.99,
-            "位置_像素": ([[20, 30], [35, 30], [35, 40], [20, 40]]
-                          if line == "-1"
+            "位置_像素": ([[20, 30], [55, 30], [55, 40], [20, 40]]
+                          if line in ("-1", "-")
                           else [[40, 30], [80, 30], [80, 40], [40, 40]]),
         } for line in lines
     ]}
@@ -66,6 +71,24 @@ class NumericMeasurement(unittest.TestCase):
             fragment["review_status"] == PENDING
             for fragment in negative["recognized_fragments"]
         ))
+
+    def test_multiple_overlapping_boxes_never_count_as_single_box_exact(self):
+        with patch.object(
+            MODULE, "run",
+            side_effect=lambda source, result_path: fake_run(
+                source, result_path, fragmented_exact=True
+            ),
+        ):
+            report = MODULE.evaluate()
+        negative = next(row for row in report["cases"] if row["id"] == "amount-negative")
+        self.assertEqual(negative["recognized_joined_for_cer"], negative["expected"])
+        self.assertEqual(negative["fragment_count"], 2)
+        self.assertFalse(negative["exact_match"])
+        self.assertEqual(report["multi_box_case_count"], 1)
+        self.assertEqual(len(negative["axis_aligned_bbox_overlaps"]), 1)
+        overlap = negative["axis_aligned_bbox_overlaps"][0]
+        self.assertEqual(overlap["intersection_envelope_pixels"], [40, 30, 55, 40])
+        self.assertTrue(all(fragment["review_status"] == PENDING for fragment in negative["recognized_fragments"]))
 
     def test_rejects_result_that_lost_pending_review_status(self):
         with patch.object(MODULE, "run", side_effect=lambda s, o: fake_run(s, o, True)):
