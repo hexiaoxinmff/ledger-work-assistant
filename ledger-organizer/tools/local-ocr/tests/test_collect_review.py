@@ -117,17 +117,18 @@ class CollectReviewProvenance(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             pdf, pages, review = self.prepare(directory)
-            grid = pages / "page_0001_grid.json"
-            data = json.loads(grid.read_text(encoding="utf8"))
-            data["未归属片段"] = [{
-                "OCR结果序号": 2,
+            ocr = pages / "page_0001_ocr.json"
+            data = json.loads(ocr.read_text(encoding="utf8"))
+            data["结果"].append({
                 "识别文本": "unknown",
                 "位置_像素": [[110, 20], [120, 20], [120, 30], [110, 30]],
                 "模型分数": 0.5,
-                "复核状态": "待人工核对原图",
-            }]
-            data["OCR识别条数"] = 2
-            grid.write_text(json.dumps(data, ensure_ascii=False), encoding="utf8")
+            })
+            ocr.write_text(json.dumps(data, ensure_ascii=False), encoding="utf8")
+            grid = pages / "page_0001_grid.json"
+            grid.unlink()
+            with mock.patch.object(GRID, "lines", return_value=([10, 100], [10, 100])):
+                GRID.map_table(pages / "page_0001.png", ocr, grid)
             output = directory / "collected.xlsx"
             with self.assertRaisesRegex(ValueError, "未归属片段"):
                 COLLECT.run(pdf, pages, review, output)
