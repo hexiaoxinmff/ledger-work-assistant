@@ -1,5 +1,5 @@
 """Local CSV/XLSX value conversion, with explicit limits and verification."""
-import argparse, csv, hashlib, itertools, os, posixpath, re, tempfile, unicodedata, zipfile
+import argparse, csv, hashlib, itertools, json, os, posixpath, re, tempfile, unicodedata, zipfile
 from xml.etree import ElementTree as ET
 from openpyxl import Workbook, load_workbook
 from openpyxl.cell import WriteOnlyCell
@@ -183,6 +183,62 @@ def _inspect_xlsx_archive(source, requested_sheet):
         raise ValueError("XLSX ZIP 结构无效或损坏") from exc
 
 
+def _xlsx_cell_text(cell, allow_display_loss):
+    if cell.data_type in ('f','e'):
+        raise ValueError('存在公式或错误值，不能安全转为 CSV')
+    if isinstance(cell.value,str) and len(cell.value)>32767:
+        raise ValueError(f'{cell.coordinate} 的文本超过 Excel 单元格容量')
+    if (cell.data_type=='d' or (cell.data_type=='n' and cell.value is not None and cell.number_format.lower()!='general')) and not allow_display_loss:
+        raise ValueError(f'{cell.coordinate} 的数字或日期显示依赖格式；CSV 无法保存显示格式。请核对原表，如接受导出底层值可指定 --allow-display-loss')
+    value='' if cell.value is None else str(cell.value)
+    if _unsafe_csv_formula_text(value):
+        raise ValueError('存在可能被电子表格执行的文本（含前导空白后的公式前缀），需人工处理')
+    return value
+
+
+def _xlsx_csv_rows(source, sheet, allow_display_loss, expected_columns):
+    """Preflight dimensions, then yield validated/padded rows without retaining the sheet."""
+    workbook=load_workbook(source,read_only=True,data_only=False)
+    try:
+        worksheet=workbook[sheet] if sheet else workbook.active
+        worksheet.reset_dimensions()
+        row_count=0
+        max_columns=0
+        for row in worksheet.iter_rows():
+            if len(row)>16384:
+                raise ValueError('工作表列数超过 Excel 容量')
+            row_count+=1
+            max_columns=max(max_columns,len(row))
+            if row_count>1048576:
+                raise ValueError('表格行数超过 Excel 容量')
+            if row_count*max_columns>1000000:
+                raise ValueError('表格范围过大，请缩小范围（最多 100 万个单元格）')
+            for cell in row:
+                _xlsx_cell_text(cell,allow_display_loss)
+        if row_count*max_columns>1000000:
+            raise ValueError('表格范围过大，请缩小范围（最多 100 万个单元格）')
+        if expected_columns is not None and max_columns!=expected_columns:
+            raise ValueError(f'实际列数不符合预期 {expected_columns} 列，请核对分隔符、工作表及表头')
+        worksheet.reset_dimensions()
+        emitted=0
+        for row in worksheet.iter_rows():
+            emitted+=1
+            if emitted>row_count:
+                raise ValueError('工作表在转换期间发生变化')
+            values=[_xlsx_cell_text(cell,allow_display_loss) for cell in row]
+            values.extend(['']*(max_columns-len(values)))
+            yield values
+        if emitted!=row_count:
+            raise ValueError('工作表在转换期间发生变化')
+    finally:
+        workbook.close()
+
+
+def _update_row_digest(digest, row):
+    digest.update(json.dumps(row,ensure_ascii=False,separators=(',',':')).encode('utf-8'))
+    digest.update(b'\\n')
+
+
 def _unsafe_csv_formula_text(value):
     candidate = value.lstrip()
     leading = value[:len(value) - len(candidate)]
@@ -216,40 +272,7 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
         w,csv_row_count,csv_column_count=_csv_to_write_only_workbook(source,encoding,separator,expected_columns)
         rows=None
     elif xlsx_to_csv:
-        w=load_workbook(source,read_only=True,data_only=False)
-        try:
-            ws=w[sheet] if sheet else w.active
-            # Ignore an incorrect declared dimension so actual cells are not silently omitted.
-            ws.reset_dimensions()
-            rows=[]
-            row_count=0
-            cell_count=0
-            for row in ws.iter_rows():
-                if len(row)>16384:
-                    raise ValueError('工作表列数超过 Excel 容量')
-                row_count+=1
-                cell_count+=len(row)
-                if row_count>1048576 or cell_count>1000000:
-                    raise ValueError('表格范围过大，请缩小范围（最多 100 万个单元格）')
-                line=[]
-                for c in row:
-                    if c.data_type in ('f','e'):raise ValueError('存在公式或错误值，不能安全转为 CSV')
-                    if isinstance(c.value,str) and len(c.value)>32767:
-                        raise ValueError(f'{c.coordinate} 的文本超过 Excel 单元格容量')
-                    if (c.data_type=='d' or (c.data_type=='n' and c.value is not None and c.number_format.lower()!='general')) and not allow_display_loss:
-                        raise ValueError(f'{c.coordinate} 的数字或日期显示依赖格式；CSV 无法保存显示格式。请核对原表，如接受导出底层值可指定 --allow-display-loss')
-                    v='' if c.value is None else str(c.value)
-                    # Reject formula-like text even when leading whitespace may be stripped by a spreadsheet.
-                    if _unsafe_csv_formula_text(v):
-                        raise ValueError('存在可能被电子表格执行的文本（含前导空白后的公式前缀），需人工处理')
-                    line.append(v)
-                rows.append(line)
-            if rows:
-                column_count=max(map(len,rows))
-                if row_count*column_count>1000000:
-                    raise ValueError('表格范围过大，请缩小范围（最多 100 万个单元格）')
-                rows=[line+['']*(column_count-len(line)) for line in rows]
-        finally:w.close()
+        rows=None
     else:raise ValueError('仅支持 CSV/TSV 与 XLSX 互转')
     if expected_columns is not None and rows is not None and any(len(row)!=expected_columns for row in rows):
         raise ValueError(f'实际列数不符合预期 {expected_columns} 列，请核对分隔符、工作表及表头')
@@ -288,13 +311,36 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
                         if actual!=rows:raise ValueError('转换后回读不一致')
                 finally:check.close()
         else:
-            with os.fdopen(fd,'w',encoding='utf-8-sig',newline='') as f:csv.writer(f,delimiter=separator).writerows(rows)
+            xlsx_row_count=0
+            expected_digest=hashlib.sha256()
+            with os.fdopen(fd,'w',encoding='utf-8-sig',newline='') as f:
+                writer=csv.writer(f,delimiter=separator)
+                if xlsx_to_csv:
+                    def checked_rows():
+                        nonlocal xlsx_row_count
+                        for row in _xlsx_csv_rows(source,sheet,allow_display_loss,expected_columns):
+                            _update_row_digest(expected_digest,row)
+                            xlsx_row_count+=1
+                            yield row
+                    writer.writerows(checked_rows())
+                else:
+                    writer.writerows(rows)
             with open(tempname,encoding='utf-8-sig',newline='') as f:
-                if list(csv.reader(f,strict=True,delimiter=separator))!=rows:raise ValueError('转换后回读不一致')
+                reader=csv.reader(f,strict=True,delimiter=separator)
+                if xlsx_to_csv:
+                    actual_digest=hashlib.sha256()
+                    actual_count=0
+                    for row in reader:
+                        _update_row_digest(actual_digest,row)
+                        actual_count+=1
+                    if actual_count!=xlsx_row_count or actual_digest.digest()!=expected_digest.digest():
+                        raise ValueError('转换后回读不一致')
+                elif list(reader)!=rows:
+                    raise ValueError('转换后回读不一致')
         if sha(source)!=before:raise ValueError('源文件发生变化，结果不可交付')
         os.link(tempname,output)
     finally:os.unlink(tempname)
-    return csv_row_count if csv_to_xlsx else len(rows)
+    return csv_row_count if csv_to_xlsx else (xlsx_row_count if xlsx_to_csv else len(rows))
 
 
 if __name__=='__main__':

@@ -201,4 +201,17 @@ class ConvertTable(unittest.TestCase):
     loader.assert_not_called()
    self.assertFalse(output.exists())
 
+ def test_xlsx_to_csv_streams_rows_and_verifies_roundtrip(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   directory=Path(tmp);source=directory/'source.xlsx';output=directory/'output.csv'
+   workbook=Workbook();ws=workbook.active
+   for index in range(2000):
+    ws.append([f'{index:05d}',f'{index}.20',''])
+   workbook.save(source);workbook.close()
+   self.assertEqual(module.run(str(source),str(output),expected_columns=3),2000)
+   with output.open(encoding='utf-8-sig',newline='') as stream:
+    rows=list(csv.reader(stream))
+   self.assertEqual(rows[0],['00000','0.20',''])
+   self.assertEqual(rows[-1],['01999','1999.20',''])
+
 if __name__=='__main__':unittest.main()
