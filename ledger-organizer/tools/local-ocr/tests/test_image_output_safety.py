@@ -1,5 +1,6 @@
 """Synthetic tests for OCR output publication; no OCR runtime or network is used."""
 import hashlib
+from enum import Enum
 import importlib.util
 import json
 from pathlib import Path
@@ -28,12 +29,16 @@ MODEL_PATHS = {
     "ch_ppocr_mobile_v2.0_cls_mobile.onnx": "/synthetic/models/cls.onnx",
     "PP-OCRv6_rec_small.onnx": "/synthetic/models/rec.onnx",
 }
+class FakeEngineType(Enum):
+    ONNXRUNTIME = "onnxruntime"
+
+
 EXPECTED_PARAMS = {
-    "Det.engine_type": "onnxruntime",
+    "Det.engine_type": FakeEngineType.ONNXRUNTIME,
     "Det.model_path": MODEL_PATHS["PP-OCRv6_det_small.onnx"],
-    "Cls.engine_type": "onnxruntime",
+    "Cls.engine_type": FakeEngineType.ONNXRUNTIME,
     "Cls.model_path": MODEL_PATHS["ch_ppocr_mobile_v2.0_cls_mobile.onnx"],
-    "Rec.engine_type": "onnxruntime",
+    "Rec.engine_type": FakeEngineType.ONNXRUNTIME,
     "Rec.model_path": MODEL_PATHS["PP-OCRv6_rec_small.onnx"],
 }
 
@@ -122,12 +127,21 @@ class ImageOutputSafety(unittest.TestCase):
                 )
 
         package.RapidOCR = FakeRapidOCR
-        return package
+        package.__path__ = []
+        utils = types.ModuleType("rapidocr.utils")
+        utils.__path__ = []
+        typings = types.ModuleType("rapidocr.utils.typings")
+        typings.EngineType = FakeEngineType
+        return {
+            "rapidocr": package,
+            "rapidocr.utils": utils,
+            "rapidocr.utils.typings": typings,
+        }
 
     def run_fake(self, source, output, observed_socket_methods=None, observed_params=None):
         runtime = {"model_paths": MODEL_PATHS}
         with mock.patch.object(MODULE, "check_runtime", return_value=runtime), mock.patch.dict(
-            sys.modules, {"rapidocr": self.fake_ocr(
+            sys.modules, self.fake_ocr(
                 observed_socket_methods=observed_socket_methods,
                 observed_params=observed_params,
             )}
@@ -236,7 +250,7 @@ class ImageOutputSafety(unittest.TestCase):
                 directory = Path(temporary)
                 source, output = self.fixture(directory)
                 with mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}), mock.patch.dict(
-                    sys.modules, {"rapidocr": self.fake_ocr()}
+                    sys.modules, self.fake_ocr()}
                 ):
                     if failure == "write":
                         context = mock.patch.object(
@@ -270,7 +284,7 @@ class ImageOutputSafety(unittest.TestCase):
                 return original_sha(path)
 
             with mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}), mock.patch.dict(
-                sys.modules, {"rapidocr": self.fake_ocr()}
+                sys.modules, self.fake_ocr()}
             ), mock.patch.object(MODULE, "sha", side_effect=changed_on_final_check):
                 with self.assertRaisesRegex(ValueError, "原图在识别期间变化"):
                     MODULE.run(source, output)
@@ -299,7 +313,7 @@ class ImageOutputSafety(unittest.TestCase):
                 return real_link(staged, destination)
 
             with mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}), mock.patch.dict(
-                sys.modules, {"rapidocr": self.fake_ocr()}
+                sys.modules, self.fake_ocr()}
             ), mock.patch.object(MODULE.os, "link", side_effect=competing_writer):
                 with self.assertRaises(FileExistsError):
                     MODULE.run(source, output)
