@@ -73,6 +73,78 @@ class PdfTextToExcel(unittest.TestCase):
             ["人民币叁佰伍拾元整", "三百五十元", "负壹仟贰佰元整", "三万零五百", "人民币1,234.56元整", "负100元"],
         )
 
+    def test_chinese_amount_candidates_survive_pdf_export_with_offsets_and_review_state(self):
+        text = "金额人民币叁佰伍拾元整，欠款人民币1,234.56元整；第十二项"
+
+        class Searcher:
+            def __init__(self, match):
+                self.match = match
+                self.used = False
+            def get_next(self):
+                if self.used:
+                    return None
+                self.used = True
+                return self.match
+            def close(self):
+                pass
+
+        class TextPage:
+            def get_text_bounded(self):
+                return text
+            def search(self, candidate, match_case=True):
+                self.assert_match_case = match_case
+                start = text.index(candidate)
+                return Searcher((start, len(candidate)))
+            def get_text_range(self, start, count):
+                return text[start:start + count]
+            def get_charbox(self, index):
+                return (float(index), 0.0, float(index + 1), 1.0)
+            def close(self):
+                pass
+
+        class Page:
+            def get_textpage(self):
+                return TextPage()
+            def close(self):
+                pass
+
+        class Document:
+            def __len__(self):
+                return 1
+            def __getitem__(self, index):
+                if index != 0:
+                    raise IndexError(index)
+                return Page()
+            def close(self):
+                pass
+
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source, output = directory / "synthetic-cjk.pdf", directory / "review.xlsx"
+            source.write_bytes(b"%PDF-1.4 synthetic mocked text layer")
+            before = hashlib.sha256(source.read_bytes()).hexdigest()
+            with patch.object(module.pdfium, "PdfDocument", return_value=Document()):
+                result = module.run(source, output)
+            self.assertEqual(result["number_candidates"], 2)
+            self.assertEqual(result["source_sha256"], before)
+            self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(), before)
+            workbook = load_workbook(output, read_only=True, data_only=False)
+            try:
+                raw = list(workbook["页面原文"].values)
+                exported_text = "".join(row[4] for row in raw[1:])
+                for phrase in ("人民币叁佰伍拾元整", "人民币1,234.56元整", "第十二项"):
+                    self.assertIn(phrase, exported_text)
+                rows = list(workbook["数字候选"].values)[1:]
+                by_text = {row[2]: row for row in rows}
+                expected = ["人民币叁佰伍拾元整", "人民币1,234.56元整"]
+                self.assertEqual(set(by_text), set(expected))
+                for phrase in expected:
+                    self.assertEqual(by_text[phrase][1], text.index(phrase))
+                    self.assertEqual(by_text[phrase][9], "待人工逐字符核对原页")
+                    self.assertIsNotNone(by_text[phrase][4])
+            finally:
+                workbook.close()
+
     def test_uncertain_text_search_never_emits_coordinates(self):
         class Searcher:
             def __init__(self, matches):
