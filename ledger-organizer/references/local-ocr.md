@@ -1,8 +1,8 @@
 # 本地 OCR 试验边界 v0.20
 
-v0.30 准备检查：用拟运行 OCR 的同一解释器执行 `python tools/local-ocr/recognize_image.py --check-runtime`，检查固定版本及三份模型哈希。无需图片或输出路径，不加载识别引擎，不下载模型；版本不符、缺模型或哈希不一致即停止。依赖导入自检另用 `tools/check_environment.py --task local_ocr` 或 `--task pdf_pipeline`；两类检查都通过仍需实际虚构识别与人工复核，不能据此报告数字准确。
+v0.30 准备检查：用拟运行 OCR 的同一解释器执行 `python tools/local-ocr/recognize_image.py --check-runtime`，检查固定版本及三份模型哈希。无需图片或输出路径，不加载识别引擎、不下载模型；版本不符、缺模型或哈希不一致即停止。需获取模型时，仅由使用者显式运行 `python tools/local-ocr/prepare_models.py`；该脚本不会随识别或检查自动运行。依赖导入自检另用 `tools/check_environment.py --task local_ocr` 或 `--task pdf_pipeline`；两类检查都通过仍需实际虚构识别与人工复核，不能据此报告数字准确。
 
-该入口使用 RapidOCR 和 ONNX Runtime，本仓库不包含运行时或模型，先在独立环境自行按 `tools/local-ocr/requirements.txt` 准备依赖；工具不负责安装、下载或修改系统。来源：https://github.com/RapidAI/RapidOCR ，代码及模型按上游说明使用 Apache-2.0；实际依赖及模型的许可应分别核对。运行前逐项检查内置默认模型的名称和 SHA-256，不符合即停止。运行时在 Python 进程中阻断 socket 连接，仅为进程级措施，不能证明操作系统隔离或平台不接收数据。
+该入口使用 RapidOCR 和 ONNX Runtime，本仓库不包含运行时或模型；先在独立环境自行按 `tools/local-ocr/requirements.txt` 准备依赖，技能不负责安装或修改系统。模型只由显式运行的 `tools/local-ocr/prepare_models.py` 下载；它检查 RapidOCR 版本后自动定位包内的 models 目录，目录不存在时停止且不创建。来源：https://github.com/RapidAI/RapidOCR ，代码及模型按上游说明使用 Apache-2.0；实际依赖及模型的许可应分别核对。运行前逐项检查内置默认模型的名称和 SHA-256，不符合即停止。运行时在 Python 进程中阻断 socket 连接，仅为进程级措施，不能证明操作系统隔离或平台不接收数据。
 
 本工具只读取单张本地 PNG/JPEG，生成含文本、检测框、分数、源文件名和 SHA-256 的 JSON；每条均标待人工核对。检测框不是表格单元格，不自动识别表格结构、分配金额或输出财务结论。模型分数不保证金额正确，空白结果也不代表原图一定空白。扫描 PDF、多页、合并单元格和其他文件须用其他已确认能力。
 
@@ -127,6 +127,6 @@ RapidOCR 3.10.0 可对无有效输出返回 `RapidOCROutput()`; 输出结构中�
 
 ## v0.70 固定 OCR 模型准备与 CI 真实推理
 
-`prepare_models.py` 仅支持 rapidocr 3.10.0，自动定位已安装包内的 models 目录并要求该目录已存在。它通过固定 URL 逐个下载 PP-OCRv6 detection/recognition small 与 PP-OCRv4 mobile direction 模型，限制单文件 512 MiB，流式计算 SHA-256，匹配内置哈希后用硬链接独占发布；已有正确模型跳过，已有不匹配文件、哈希错误、下载中断或目标文件竞争时停止且清理暂存文件。仅用户主动调用才联网；不能把下载成功当作模型能正确识别。
+`python tools/local-ocr/prepare_models.py` 仅支持 rapidocr 3.10.0，自动定位已安装包内的 models 目录并要求该目录已存在。它通过固定 URL 逐个下载 PP-OCRv6 detection/recognition small 与 PP-OCRv4 mobile direction 模型，限制单文件 512 MiB，流式计算 SHA-256，匹配内置哈希后用硬链接独占发布；已有正确模型跳过，已有不匹配文件、哈希错误、下载中断或目标文件竞争时停止且清理暂存文件。仅用户主动调用才联网；不能把下载成功当作模型能正确识别。
 
 GitHub Actions 的 OCR pinned model smoke workflow 在 Ubuntu/Python 3.12 安装固定运行时、调用上述准备器，并在合成图片中实际调用 RapidOCR 固定模型识别 `00042`，检查文本完全匹配且输出仍标待人工核对。该流程验证受控环境下真实模型加载和一次数字推理，不代表真实票据精度、Windows 本机运行、模型识别普遍可靠或隐私/网络隔离；CI 只向推理器提供临时生成的虚构图片。
