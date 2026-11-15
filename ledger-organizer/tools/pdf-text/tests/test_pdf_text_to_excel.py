@@ -111,7 +111,7 @@ class PdfTextToExcel(unittest.TestCase):
                     self.assertIn(line, extracted)
                 candidates = list(workbook["数字候选"].values)[1:]
                 by_text = {row[2]: row for row in candidates}
-                expected = lines[:2]
+                expected = ["人民币叁佰伍拾元整", "人民币1,234.56元整"]
                 self.assertEqual(set(by_text), set(expected))
                 for phrase in expected:
                     self.assertEqual(by_text[phrase][1], extracted.index(phrase))
