@@ -55,7 +55,25 @@ class ReconcileConfig:
 _ALLOWED_MATCH_FIELDS = {"no", "amount", "date", "counterparty"}
 
 
+def _integer_setting(value: Any, name: str, minimum: int, maximum: int) -> int:
+    if isinstance(value, bool):
+        raise ConfigError(f"{name} 必须是整数，不能是布尔值")
+    if type(value) is int:
+        parsed = value
+    elif isinstance(value, str) and re.fullmatch(r"[+-]?[0-9]+", value.strip()):
+        parsed = int(value.strip())
+    else:
+        raise ConfigError(f"{name} 必须是整数，不能进行截断或隐式转换")
+    if not minimum <= parsed <= maximum:
+        raise ConfigError(f"{name} 必须在 {minimum} 至 {maximum} 之间")
+    return parsed
+
+
 def _validate_match(match: MatchConfig, left: FieldMap, right: FieldMap) -> None:
+    if type(match.amount_scale) is not int or not 0 <= match.amount_scale <= 12:
+        raise ConfigError("amount_scale 必须为 0 至 12 的整数")
+    if type(match.date_tolerance_days) is not int or not 0 <= match.date_tolerance_days <= 36500:
+        raise ConfigError("date_tolerance_days 必须为 0 至 36500 的整数")
     if match.direction_rule not in {"signed", "none"}:
         raise ConfigError(f"direction_rule 必须为 signed 或 none：{match.direction_rule}")
     if match.direction_rule == "signed" and not (left.direction and right.direction):
@@ -121,14 +139,18 @@ def load_config(path: str) -> ReconcileConfig:
     if not tol.is_finite() or tol < 0:
         raise ConfigError(f"amount_tolerance 必须为非负有限小数：{m.get('amount_tolerance')}")
 
+    date_tolerance_days = _integer_setting(
+        m.get("date_tolerance_days", 0), "date_tolerance_days", 0, 36500
+    )
+    amount_scale = _integer_setting(m.get("amount_scale", 2), "amount_scale", 0, 12)
     try:
         match = MatchConfig(
             primary_key=m.get("primary_key", "no"),
             composite_keys=tuple(m.get("composite_keys", []) or ()),
             amount_tolerance=tol,
-            date_tolerance_days=int(m.get("date_tolerance_days", 0)),
+            date_tolerance_days=date_tolerance_days,
             direction_rule=m.get("direction_rule", "signed"),
-            amount_scale=int(m.get("amount_scale", 2)),
+            amount_scale=amount_scale,
         )
     except (TypeError, ValueError) as e:
         raise ConfigError(f"match 配置非法：{e}") from e
