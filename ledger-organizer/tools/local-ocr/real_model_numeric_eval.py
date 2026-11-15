@@ -6,6 +6,7 @@ manual review. Only generated fictional images are sent to the OCR engine.
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import tempfile
@@ -77,18 +78,40 @@ def evaluate():
             if not isinstance(recognized_rows, list):
                 raise ValueError(f"{case['id']}: OCR 结果结构无效")
             recognized = []
-            for item in recognized_rows:
+            fragments = []
+            for result_index, item in enumerate(recognized_rows, 1):
                 if not isinstance(item, dict) or not isinstance(item.get("识别文本"), str):
                     raise ValueError(f"{case['id']}: OCR 识别行结构无效")
                 if item.get("复核状态") != PENDING:
                     raise ValueError(f"{case['id']}: 结果未保留人工复核状态")
+                box = item.get("位置_像素")
+                score = item.get("模型分数")
+                if not isinstance(box, list) or len(box) != 4:
+                    raise ValueError(f"{case['id']}: OCR 边界框结构无效")
+                if any(
+                    not isinstance(point, list) or len(point) != 2
+                    or any(isinstance(value, bool) or not isinstance(value, (int, float))
+                           or not math.isfinite(value) for value in point)
+                    for point in box
+                ):
+                    raise ValueError(f"{case['id']}: OCR 边界框坐标无效")
+                if isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score) or not 0 <= score <= 1:
+                    raise ValueError(f"{case['id']}: OCR 模型分数无效")
                 recognized.append(item["识别文本"])
+                fragments.append({
+                    "ocr_result_index": result_index,
+                    "recognized_text": item["识别文本"],
+                    "model_score_reference_only": float(score),
+                    "bbox_pixels": box,
+                    "review_status": PENDING,
+                })
             joined = "".join(recognized)
             distance = edit_distance(case["expected"], joined)
             rows.append({
                 **case,
                 "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
                 "recognized_lines": recognized,
+                "recognized_fragments": fragments,
                 "recognized_joined_for_cer": joined,
                 "exact_match": len(recognized) == 1 and joined == case["expected"],
                 "edit_distance": distance,
