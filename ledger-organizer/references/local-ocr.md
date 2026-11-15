@@ -127,6 +127,6 @@ RapidOCR 3.10.0 可对无有效输出返回 `RapidOCROutput()`; 输出结构中�
 
 ## v0.70 固定 OCR 模型准备与 CI 真实推理
 
-`prepare_models.py --model-dir <dir>` 仅支持 rapidocr 3.10.0，目录须已存在。它通过固定 URL 逐个下载 PP-OCRv6 detection/recognition small 与 PP-OCRv4 mobile direction 模型，限制单文件 512 MiB，流式计算 SHA-256，匹配内置哈希后用硬链接独占发布；已有正确模型跳过，已有不匹配文件、哈希错误、下载中断或目标文件竞争时停止且清理暂存文件。仅用户主动调用才联网；不能把下载成功当作模型能正确识别。
+`prepare_models.py` 仅支持 rapidocr 3.10.0，自动定位已安装包内的 models 目录并要求该目录已存在。它通过固定 URL 逐个下载 PP-OCRv6 detection/recognition small 与 PP-OCRv4 mobile direction 模型，限制单文件 512 MiB，流式计算 SHA-256，匹配内置哈希后用硬链接独占发布；已有正确模型跳过，已有不匹配文件、哈希错误、下载中断或目标文件竞争时停止且清理暂存文件。仅用户主动调用才联网；不能把下载成功当作模型能正确识别。
 
 GitHub Actions 的 OCR pinned model smoke workflow 在 Ubuntu/Python 3.12 安装固定运行时、调用上述准备器，并在合成图片中实际调用 RapidOCR 固定模型识别 `00042`，检查文本完全匹配且输出仍标待人工核对。该流程验证受控环境下真实模型加载和一次数字推理，不代表真实票据精度、Windows 本机运行、模型识别普遍可靠或隐私/网络隔离；CI 只向推理器提供临时生成的虚构图片。
