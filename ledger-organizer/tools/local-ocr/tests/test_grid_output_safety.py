@@ -23,6 +23,7 @@ def load_with_fake_vision_modules():
     fake_numpy = types.ModuleType("numpy")
     fake_numpy.uint8 = object()
     fake_numpy.fromfile = lambda path, dtype=None: object()
+    fake_numpy.frombuffer = lambda buffer, dtype=None: object()
     spec = importlib.util.spec_from_file_location("table_grid_under_test", HERE / "table_grid.py")
     module = importlib.util.module_from_spec(spec)
     with mock.patch.dict(sys.modules, {"cv2": fake_cv2, "numpy": fake_numpy}):
