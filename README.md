@@ -4,7 +4,7 @@
 
 ## 安装和使用
 
-当前技能版本：v0.78。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
+当前技能版本：v0.79。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
 
 本机虚构回归入口：`python ledger-organizer/tools/run_checks.py`。默认执行基础环境/样例/转换/Word 提取测试；对账业务规则测试用 `--suite ledger`（需预装 pandas、openpyxl、PyYAML），PDF 文字层转表测试用 `--suite pdf-text`（需预装 pypdfium2、openpyxl），OCR 相关测试用 `--suite ocr`，全部用 `--suite all`。各组依赖须事先满足，报告保留失败、超时和未运行项目，不能将部分通过当成全功能通过。这些测试不包含真实账目、平台自主调用、界面或 OCR 准确率验收。
 
@@ -25,6 +25,8 @@ python ledger-organizer/tools/format-conversion/convert_table.py ledger-organize
 这是转换命令示例，不会安装技能或证明平台已自动调用。转换后仍应重新读取结果并逐项核对。首次试用先完成样例验收，再评估本人任务所需规则和未覆盖限制。
 
 下载本仓库后，将 `ledger-organizer` 文件夹按所用 Agent 平台的技能安装方式导入，或让支持读取文件的 Agent 阅读 `ledger-organizer/SKILL.md`。具体目录、自动加载、联网和文件访问能力因平台而异，需在目标环境测试。可先用虚构样例提供两张表、确认字段和规则，再要求保留来源、生成复核清单。
+
+对账计算使用根据输入位数和记录数量扩展的 Decimal 精度，避免大额汇总受默认 28 位上下文影响；大额虚构台账端到端回归已纳入 ledger 测试组。此项仍受解析器金额精度范围约束，不代表真实账务验收。
 
 技能内含有限测试的 Python 对账适配副本；运行需要 Python、pandas、openpyxl、PyYAML，实际依赖和平台权限须另行检查。其结果可选表格或附加结果项柱状图；结果项数量不等于交易笔数。脚本当前仅用虚构数据测试，不用于真实账目。
 
