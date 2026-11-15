@@ -27,7 +27,14 @@ def fake_run(source, result_path, invalid_review=False):
     else:
         status = PENDING
     payload = {"结果": [
-        {"识别文本": line, "复核状态": status} for line in lines
+        {
+            "识别文本": line,
+            "复核状态": status,
+            "模型分数": 0.99,
+            "位置_像素": ([[20, 30], [35, 30], [35, 40], [20, 40]]
+                          if line == "-1"
+                          else [[40, 30], [80, 30], [80, 40], [40, 40]]),
+        } for line in lines
     ]}
     Path(result_path).write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
@@ -47,6 +54,18 @@ class NumericMeasurement(unittest.TestCase):
         )
         self.assertTrue(report["review_required"])
         self.assertFalse(report["accuracy_gate"])
+        self.assertEqual(
+            negative["recognized_fragments"][0]["bbox_pixels"],
+            [[40, 30], [80, 30], [80, 40], [40, 40]],
+        )
+        self.assertEqual(
+            [fragment["ocr_result_index"] for fragment in negative["recognized_fragments"]],
+            [1, 2],
+        )
+        self.assertTrue(all(
+            fragment["review_status"] == PENDING
+            for fragment in negative["recognized_fragments"]
+        ))
 
     def test_rejects_result_that_lost_pending_review_status(self):
         with patch.object(MODULE, "run", side_effect=lambda s, o: fake_run(s, o, True)):
