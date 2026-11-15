@@ -114,6 +114,8 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
     if text_format=='.tsv' and delimiter not in (None,'\t'):raise ValueError('TSV 必须使用制表符')
     separator=delimiter if delimiter is not None else ('\t' if text_format=='.tsv' else ',')
     csv_to_xlsx = src in ('.csv','.tsv') and dst=='.xlsx'
+    if csv_to_xlsx and os.path.getsize(source)>MAX_CSV_BYTES:raise ValueError('CSV 文件超过 100 MiB 上限')
+    before=sha(source)
     csv_row_count = csv_column_count = None
     if csv_to_xlsx:
         if encoding not in ('utf-8','utf-8-sig','utf-16','gb18030','gbk'):raise ValueError('不支持该编码，请确认实际编码')
