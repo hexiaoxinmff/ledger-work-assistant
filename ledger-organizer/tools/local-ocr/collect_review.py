@@ -52,6 +52,7 @@ def run(pdf,pages_dir,reviewed,output):
   if ocr_count==0 and not ocr_status.startswith(('未检出','旧版 OCR')):raise ValueError('零条 OCR 结果状态不匹配')
   if ocr_count>0 and not ocr_status.startswith(('已检出','旧版 OCR')):raise ValueError('非空 OCR 结果状态不匹配')
   expected_page_statuses.append((f'第{i}页 OCR 识别状态',ocr_status))
+  expected_provenance[f'第{i}页 OCR 识别状态']=ocr_status
   if unassigned:raise ValueError('存在未归属片段，不能汇总为已完成复核')
   seen=set();page_fragments=[]
   for c in cells:
