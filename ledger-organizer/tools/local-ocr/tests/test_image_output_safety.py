@@ -144,7 +144,7 @@ class ImageOutputSafety(unittest.TestCase):
             sys.modules, self.fake_ocr(
                 observed_socket_methods=observed_socket_methods,
                 observed_params=observed_params,
-            )}
+            )
         ):
             return MODULE.run(source, output)
 
@@ -250,7 +250,7 @@ class ImageOutputSafety(unittest.TestCase):
                 directory = Path(temporary)
                 source, output = self.fixture(directory)
                 with mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}), mock.patch.dict(
-                    sys.modules, self.fake_ocr()}
+                    sys.modules, self.fake_ocr()
                 ):
                     if failure == "write":
                         context = mock.patch.object(
@@ -284,7 +284,7 @@ class ImageOutputSafety(unittest.TestCase):
                 return original_sha(path)
 
             with mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}), mock.patch.dict(
-                sys.modules, self.fake_ocr()}
+                sys.modules, self.fake_ocr()
             ), mock.patch.object(MODULE, "sha", side_effect=changed_on_final_check):
                 with self.assertRaisesRegex(ValueError, "原图在识别期间变化"):
                     MODULE.run(source, output)
@@ -313,7 +313,7 @@ class ImageOutputSafety(unittest.TestCase):
                 return real_link(staged, destination)
 
             with mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}), mock.patch.dict(
-                sys.modules, self.fake_ocr()}
+                sys.modules, self.fake_ocr()
             ), mock.patch.object(MODULE.os, "link", side_effect=competing_writer):
                 with self.assertRaises(FileExistsError):
                     MODULE.run(source, output)
