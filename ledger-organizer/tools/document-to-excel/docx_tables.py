@@ -4,6 +4,18 @@ from xml.etree import ElementTree as ET
 from openpyxl import Workbook, load_workbook
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+CHINESE_FINANCIAL_DIGITS = set("壹贰貳叁參肆伍陆陸柒捌玖零〇")
+CHINESE_NUMBER_DIGITS = set("零〇一二两兩三四五六七八九")
+CHINESE_NUMBER_UNITS = set("十拾百佰千仟万萬亿億元圆圓角分厘")
+
+def contains_number(text):
+    if any(char.isdigit() for char in text):
+        return True
+    if any(char in CHINESE_FINANCIAL_DIGITS for char in text):
+        return True
+    return (any(char in CHINESE_NUMBER_DIGITS for char in text)
+            and any(char in CHINESE_NUMBER_UNITS for char in text))
+
 
 def sha(path):
     h = hashlib.sha256()
@@ -79,7 +91,7 @@ def run(source, output):
             audit = wb.create_sheet("数字复核")
             audit.append(["文档表序号", "表内行", "表内列", "含数字原文", "复核状态"])
             for ti, ri, ci, value in rows:
-                if any(ch.isdigit() for ch in value):
+                if contains_number(value):
                     audit.append([ti, ri, ci, value, "待人工复核"])
                     audit.cell(audit.max_row, 4).data_type = "s"
             wb.save(temporary)
@@ -101,7 +113,7 @@ def run(source, output):
             audit_actual = list(check["数字复核"].values)[1:]
             audit_expected = [
                 (ti, ri, ci, value, "待人工复核")
-                for ti, ri, ci, value in rows if any(ch.isdigit() for ch in value)
+                for ti, ri, ci, value in rows if contains_number(value)
             ]
             if audit_actual != audit_expected:
                 raise ValueError("数字复核清单回读不一致")
