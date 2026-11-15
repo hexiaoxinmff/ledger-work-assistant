@@ -110,8 +110,10 @@ class ImageOutputSafety(unittest.TestCase):
             with self.subTest(case=label), tempfile.TemporaryDirectory() as temporary:
                 source, output = self.fixture(Path(temporary))
                 result = SimpleNamespace(txts=["00042"], boxes=[box], scores=[score])
-                with mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}), \\
-                     mock.patch.object(MODULE, "_recognize_without_python_socket_access", return_value=result):
+                with (
+                    mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}),
+                    mock.patch.object(MODULE, "_recognize_without_python_socket_access", return_value=result),
+                ):
                     with self.assertRaisesRegex(ValueError, message):
                         MODULE.run(source, output)
                 self.assertFalse(output.exists())
