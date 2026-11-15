@@ -33,6 +33,7 @@ def load_grid():
     numpy = types.ModuleType("numpy")
     numpy.uint8 = object()
     numpy.fromfile = lambda *_args, **_kwargs: object()
+    numpy.frombuffer = lambda *_args, **_kwargs: object()
     spec = importlib.util.spec_from_file_location("collect_test_grid", HERE / "table_grid.py")
     module = importlib.util.module_from_spec(spec)
     with mock.patch.dict(sys.modules, {"cv2": cv2, "numpy": numpy}):
