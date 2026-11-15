@@ -57,6 +57,13 @@ def run(pdf,pages_dir,output,embed_previews=False):
   if ocr_data.get('来源sha256')!=imgsha or g.get('来源sha256')!=imgsha or g.get('OCR结果sha256')!=ocrsha:raise ValueError('页面识别结果不匹配')
   rows,cols=g.get('行数'),g.get('列数');cells=g.get('单元格');unassigned=g.get('未归属片段');ocr_count=g.get('OCR识别条数')
   if type(rows) is not int or type(cols) is not int or not 1<=rows<=100 or not 1<=cols<=30 or not isinstance(cells,list) or len(cells)!=rows*cols or not isinstance(unassigned,list) or type(ocr_count) is not int or ocr_count<0:raise ValueError('网格数据无效或缺少 OCR 识别条数')
+  ocr_status=ocr_data.get('识别状态')
+  if ocr_status is None:ocr_status='旧版 OCR 缺少识别状态；不能据此判断原图空白，需人工查看'
+  grid_status=g.get('OCR识别状态')
+  if grid_status is None:grid_status='旧版 OCR 网格缺少识别状态；不能据此判断原图空白，需人工查看'
+  if not isinstance(ocr_status,str) or not ocr_status.strip() or grid_status!=ocr_status:raise ValueError('页面 OCR 识别状态与网格状态不一致')
+  if ocr_count==0 and not ocr_status.startswith(('未检出','旧版 OCR')):raise ValueError('零条 OCR 结果状态不匹配')
+  if ocr_count>0 and not ocr_status.startswith(('已检出','旧版 OCR')):raise ValueError('非空 OCR 结果状态不匹配')
   ws=w.create_sheet(f'页{i:03d}_待核对');seen=set();page_details=[]
   for c in cells:
    r,k,text,box,fragments=c.get('行'),c.get('列'),c.get('识别文本'),c.get('边界_像素'),c.get('片段')
@@ -78,6 +85,7 @@ def run(pdf,pages_dir,output,embed_previews=False):
   detail_expected.extend(page_details)
   if len(detail_expected)>1_048_575:raise ValueError('OCR 片段超过 Excel 工作表容量')
   append_text(info,[f'第{i}页 OCR 识别条数',ocr_count],[])
+  append_text(info,[f'第{i}页 OCR 识别状态',ocr_status],[])
   append_text(info,[f'第{i}页图片 SHA-256',imgsha],[]);append_text(info,[f'第{i}页 OCR JSON SHA-256',ocrsha],[]);append_text(info,[f'第{i}页网格 JSON SHA-256',gridsha],[])
   if embed_previews:
    from PIL import Image as PILImage
