@@ -108,7 +108,7 @@ def _unsafe_csv_formula_text(value):
 def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,delimiter=None,expected_columns=None):
     if expected_columns is not None and (type(expected_columns) is not int or not 1<=expected_columns<=16384):raise ValueError('预期列数必须为 1 至 16384 的整数')
     if os.path.realpath(source)==os.path.realpath(output):raise ValueError('输出不可覆盖输入')
-    before=sha(source); src=os.path.splitext(source)[1].lower(); dst=os.path.splitext(output)[1].lower()
+    src=os.path.splitext(source)[1].lower(); dst=os.path.splitext(output)[1].lower()
     text_format=src if src in ('.csv','.tsv') else dst
     if delimiter not in (None,',',';','\t'):raise ValueError('分隔符只支持逗号、分号或制表符')
     if text_format=='.tsv' and delimiter not in (None,'\t'):raise ValueError('TSV 必须使用制表符')
@@ -176,7 +176,7 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
         if sha(source)!=before:raise ValueError('源文件发生变化，结果不可交付')
         os.link(tempname,output)
     finally:os.unlink(tempname)
-    return len(rows)
+    return csv_row_count if csv_to_xlsx else len(rows)
 
 
 if __name__=='__main__':
