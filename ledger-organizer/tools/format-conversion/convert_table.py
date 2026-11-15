@@ -1,6 +1,7 @@
 """Local CSV/XLSX value conversion, with explicit limits and verification."""
-import argparse, csv, hashlib, os, re, tempfile, unicodedata
+import argparse, csv, hashlib, itertools, os, re, tempfile, unicodedata
 from openpyxl import Workbook, load_workbook
+from openpyxl.cell import WriteOnlyCell
 
 
 def sha(path):
@@ -8,6 +9,87 @@ def sha(path):
     with open(path,'rb') as f:
         for chunk in iter(lambda:f.read(1048576),b''):h.update(chunk)
     return h.hexdigest()
+
+
+
+MAX_CSV_BYTES = 100 * 1024 * 1024
+MAX_CSV_RECORD_CHARS = 1_048_576
+MAX_CSV_PHYSICAL_LINE_CHARS = 65_536
+MAX_CSV_CELLS = 10_000_000
+
+
+class _BoundedCsvLines:
+    """Bound each physical line and logical CSV record before csv.reader allocates cells."""
+    def __init__(self, stream):
+        self.stream = stream
+        self.record_chars = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        line = self.stream.readline(MAX_CSV_PHYSICAL_LINE_CHARS + 1)
+        if line == "":
+            raise StopIteration
+        if len(line) > MAX_CSV_PHYSICAL_LINE_CHARS:
+            raise ValueError("CSV 单行超过 65536 个字符上限")
+        self.record_chars += len(line)
+        if self.record_chars > MAX_CSV_RECORD_CHARS:
+            raise ValueError("CSV 单条记录超过 1048576 个字符上限")
+        return line
+
+    def finish_record(self):
+        self.record_chars = 0
+
+
+def _csv_rows(stream, separator):
+    lines = _BoundedCsvLines(stream)
+    reader = csv.reader(lines, strict=True, delimiter=separator)
+    for row in reader:
+        lines.finish_record()
+        yield row
+
+
+def _csv_to_write_only_workbook(source, encoding, separator, expected_columns):
+    if os.path.getsize(source) > MAX_CSV_BYTES:
+        raise ValueError("CSV 文件超过 100 MiB 上限")
+    workbook = Workbook(write_only=True)
+    worksheet = workbook.create_sheet("转换结果")
+    row_count = 0
+    column_count = None
+    cell_count = 0
+    try:
+        with open(source, encoding=encoding, newline="") as stream:
+            for row in _csv_rows(stream, separator):
+                if row_count == 0:
+                    column_count = len(row)
+                    if column_count == 0:
+                        raise ValueError("CSV 列数不一致或存在空行")
+                    if column_count > 16384:
+                        raise ValueError("内容超过 Excel 容量")
+                    if expected_columns is not None and column_count != expected_columns:
+                        raise ValueError(f"实际列数不符合预期 {expected_columns} 列，请核对分隔符、工作表及表头")
+                if len(row) != column_count:
+                    raise ValueError("CSV 列数不一致或存在空行")
+                if any(len(value) > 32767 for value in row):
+                    raise ValueError("内容超过 Excel 容量")
+                row_count += 1
+                cell_count += column_count
+                if row_count > 1048576 or cell_count > MAX_CSV_CELLS:
+                    raise ValueError("CSV 行数或单元格数超过安全处理上限")
+                cells = []
+                for value in row:
+                    cell = WriteOnlyCell(worksheet, value=value)
+                    cell.data_type = "s"
+                    cells.append(cell)
+                worksheet.append(cells)
+        if row_count == 0:
+            raise ValueError("CSV 为空")
+    except Exception:
+        worksheet.close()
+        workbook.close()
+        raise
+    return workbook, row_count, column_count
 
 
 def _unsafe_csv_formula_text(value):
@@ -26,22 +108,19 @@ def _unsafe_csv_formula_text(value):
 def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,delimiter=None,expected_columns=None):
     if expected_columns is not None and (type(expected_columns) is not int or not 1<=expected_columns<=16384):raise ValueError('预期列数必须为 1 至 16384 的整数')
     if os.path.realpath(source)==os.path.realpath(output):raise ValueError('输出不可覆盖输入')
-    before=sha(source); src=os.path.splitext(source)[1].lower(); dst=os.path.splitext(output)[1].lower()
+    src=os.path.splitext(source)[1].lower(); dst=os.path.splitext(output)[1].lower()
     text_format=src if src in ('.csv','.tsv') else dst
     if delimiter not in (None,',',';','\t'):raise ValueError('分隔符只支持逗号、分号或制表符')
     if text_format=='.tsv' and delimiter not in (None,'\t'):raise ValueError('TSV 必须使用制表符')
     separator=delimiter if delimiter is not None else ('\t' if text_format=='.tsv' else ',')
-    if src in ('.csv','.tsv') and dst=='.xlsx':
+    csv_to_xlsx = src in ('.csv','.tsv') and dst=='.xlsx'
+    if csv_to_xlsx and os.path.getsize(source)>MAX_CSV_BYTES:raise ValueError('CSV 文件超过 100 MiB 上限')
+    before=sha(source)
+    csv_row_count = csv_column_count = None
+    if csv_to_xlsx:
         if encoding not in ('utf-8','utf-8-sig','utf-16','gb18030','gbk'):raise ValueError('不支持该编码，请确认实际编码')
-        with open(source,encoding=encoding,newline='') as f:rows=list(csv.reader(f,strict=True,delimiter=separator))
-        if not rows:raise ValueError('CSV 为空')
-        if any(len(r)!=len(rows[0]) for r in rows) or not rows[0]:raise ValueError('CSV 列数不一致或存在空行')
-        if len(rows)>1048576 or len(rows[0])>16384 or any(len(v)>32767 for r in rows for v in r):raise ValueError('内容超过 Excel 容量')
-        w=Workbook();ws=w.active;ws.title='转换结果'
-        for row in rows:
-            ws.append(row)
-            for c in ws[ws.max_row]:
-                if isinstance(c.value,str):c.data_type='s'
+        w,csv_row_count,csv_column_count=_csv_to_write_only_workbook(source,encoding,separator,expected_columns)
+        rows=None
     elif src=='.xlsx' and dst in ('.csv','.tsv'):
         w=load_workbook(source,read_only=False,data_only=False)
         try:
@@ -65,7 +144,7 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
                 rows.append(line)
         finally:w.close()
     else:raise ValueError('仅支持 CSV/TSV 与 XLSX 互转')
-    if expected_columns is not None and any(len(row)!=expected_columns for row in rows):
+    if expected_columns is not None and rows is not None and any(len(row)!=expected_columns for row in rows):
         raise ValueError(f'实际列数不符合预期 {expected_columns} 列，请核对分隔符、工作表及表头')
     # Stage beside the destination, verify, then publish without overwriting.
     # The temporary file may contain the same sensitive values as the source.
@@ -77,8 +156,20 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
             with open(tempname,'rb') as staged:
                 check=load_workbook(staged,read_only=True,data_only=False)
                 try:
-                    actual=[[v if v is not None else '' for v in row] for row in check.active.iter_rows(values_only=True)]
-                    if actual!=rows:raise ValueError('转换后回读不一致')
+                    actual_rows=check.active.iter_rows(values_only=True)
+                    if csv_to_xlsx:
+                        sentinel=object()
+                        with open(source,encoding=encoding,newline='') as original:
+                            expected_rows=_csv_rows(original,separator)
+                            for expected,actual in itertools.zip_longest(expected_rows,actual_rows,fillvalue=sentinel):
+                                if expected is sentinel or actual is sentinel:
+                                    raise ValueError('转换后行数回读不一致')
+                                normalized=['' if value is None else value for value in actual]
+                                normalized.extend([''] * (csv_column_count-len(normalized)))
+                                if normalized!=expected:raise ValueError('转换后回读不一致')
+                    else:
+                        actual=[[v if v is not None else '' for v in row] for row in actual_rows]
+                        if actual!=rows:raise ValueError('转换后回读不一致')
                 finally:check.close()
         else:
             with os.fdopen(fd,'w',encoding='utf-8-sig',newline='') as f:csv.writer(f,delimiter=separator).writerows(rows)
@@ -87,7 +178,7 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
         if sha(source)!=before:raise ValueError('源文件发生变化，结果不可交付')
         os.link(tempname,output)
     finally:os.unlink(tempname)
-    return len(rows)
+    return csv_row_count if csv_to_xlsx else len(rows)
 
 
 if __name__=='__main__':

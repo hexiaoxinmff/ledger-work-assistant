@@ -143,4 +143,35 @@ class ConvertTable(unittest.TestCase):
    finally:workbook.close()
    self.assertEqual(list(directory.glob('.ledger-conversion-*.tmp')),[])
 
+ def test_csv_to_xlsx_streaming_limits_reject_before_publication(self):
+  cases=[
+   ('file size', lambda:patch.object(module,'MAX_CSV_BYTES',4), '100 MiB'),
+   ('total cells', lambda:patch.object(module,'MAX_CSV_CELLS',3), '单元格数'),
+   ('logical record', lambda:patch.object(module,'MAX_CSV_RECORD_CHARS',8), '单条记录'),
+   ('physical line', lambda:patch.object(module,'MAX_CSV_PHYSICAL_LINE_CHARS',8), '单行'),
+  ]
+  for label,limit_patch,message in cases:
+   with self.subTest(limit=label),tempfile.TemporaryDirectory() as tmp:
+    directory=Path(tmp);source=directory/'input.csv';output=directory/'output.xlsx'
+    if label=='logical record':
+     source.write_text('"a\nb\nc\nd"\n',encoding='utf-8')
+    elif label=='physical line':
+     source.write_text('123456789\n',encoding='utf-8')
+    else:
+     source.write_text('id,amount\n00042,12.30\n',encoding='utf-8')
+    with limit_patch():
+     with self.assertRaisesRegex(ValueError,message):module.run(str(source),str(output))
+    self.assertFalse(output.exists())
+    self.assertEqual(list(directory.glob('.ledger-conversion-*')),[])
+
+ def test_csv_to_xlsx_streaming_preserves_text_rows_and_trailing_empty_cells(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   directory=Path(tmp);source=directory/'input.csv';output=directory/'output.xlsx'
+   rows=[['编号','金额','备注'],['00042','12.30',''],['00043','','带换行\n下一行']]
+   with source.open('w',encoding='utf-8-sig',newline='') as stream:csv.writer(stream).writerows(rows)
+   self.assertEqual(module.run(str(source),str(output),expected_columns=3),3)
+   workbook=load_workbook(output,read_only=True,data_only=False)
+   try:self.assertEqual([[v if v is not None else '' for v in row] for row in workbook.active.iter_rows(values_only=True)],rows)
+   finally:workbook.close()
+
 if __name__=='__main__':unittest.main()
