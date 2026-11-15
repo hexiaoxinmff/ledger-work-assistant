@@ -95,6 +95,29 @@ class NumericMeasurement(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "人工复核状态"):
                 MODULE.evaluate()
 
+    def test_image_variation_generators_apply_declared_transforms(self):
+        from PIL import Image
+        jpeg_case = next(case for case in MODULE.CASES if case["id"] == "negative-jpeg-q40")
+        small_case = next(case for case in MODULE.CASES if case["id"] == "negative-downsample-half")
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            jpeg = directory / "synthetic.jpg"
+            small = directory / "synthetic.png"
+            MODULE._draw_case(jpeg_case, jpeg)
+            MODULE._draw_case(small_case, small)
+            with Image.open(jpeg) as image:
+                self.assertEqual(image.format, "JPEG")
+                self.assertLess(image.width, 1600)
+            with Image.open(small) as image:
+                self.assertEqual(image.format, "PNG")
+                self.assertEqual(image.size, (800, 210))
+
+    def test_case_ids_are_unique_and_baseline_variations_are_separate(self):
+        ids = [case["id"] for case in MODULE.CASES]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(sum(case["suite"] == "baseline" for case in MODULE.CASES), 8)
+        self.assertGreaterEqual(sum(case["suite"] == "image-variation" for case in MODULE.CASES), 5)
+
     def test_report_publish_never_overwrites(self):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "report.json"
