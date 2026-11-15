@@ -63,7 +63,7 @@ def _publish_new_file(destination, payload):
             temporary.unlink(missing_ok=True)
 
 
-def evaluate(output_path):
+def evaluate():
     rows = []
     with tempfile.TemporaryDirectory(prefix="ledger-ocr-numeric-") as temporary:
         directory = Path(temporary)
@@ -87,6 +87,7 @@ def evaluate(output_path):
             distance = edit_distance(case["expected"], actual)
             rows.append({
                 **case,
+                "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
                 "recognized_lines": recognized,
                 "exact_match": len(recognized) == 1 and actual == case["expected"],
                 "edit_distance": distance if len(recognized) == 1 else len(case["expected"]),
@@ -111,7 +112,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, help="新建 JSON 报告路径，不覆盖已有文件")
     args = parser.parse_args(argv)
-    report = evaluate(args.output)
+    destination = Path(args.output)
+    if destination.exists():
+        raise FileExistsError(f"输出已存在，拒绝覆盖: {destination}")
+    report = evaluate()
     encoded = (json.dumps(report, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     _publish_new_file(args.output, encoded)
     print("## 合成数字识别测量（非准确率门禁）")
