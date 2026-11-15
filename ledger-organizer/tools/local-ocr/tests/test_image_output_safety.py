@@ -93,6 +93,8 @@ class ImageOutputSafety(unittest.TestCase):
             data = json.loads(output.read_text(encoding="utf8"))
             self.assertEqual(data["来源sha256"], digest(source))
             self.assertEqual(data["结果"][0]["识别文本"], "00042")
+            self.assertEqual(data["识别状态"], "已检出候选，全部待人工复核")
+            self.assertEqual(data["识别条数"], 1)
             self.assertEqual(data["结果"][0]["复核状态"], "待人工核对原图")
             self.assertEqual(list(directory.glob(".ledger-ocr-*")), [])
 
@@ -118,6 +120,34 @@ class ImageOutputSafety(unittest.TestCase):
                         MODULE.run(source, output)
                 self.assertFalse(output.exists())
                 self.assertEqual(list(Path(temporary).glob(".ledger-ocr-*")), [])
+
+    def test_no_detection_is_explicit_and_partial_result_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source, output = self.fixture(directory)
+            empty_result = SimpleNamespace(txts=None, boxes=None, scores=None)
+            with (
+                mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}),
+                mock.patch.object(MODULE, "_recognize_without_python_socket_access", return_value=empty_result),
+            ):
+                self.assertEqual(MODULE.run(source, output), 0)
+            data = json.loads(output.read_text(encoding="utf8"))
+            self.assertEqual(data["结果"], [])
+            self.assertEqual(data["识别条数"], 0)
+            self.assertIn("不能据此判断原图空白", data["识别状态"])
+            self.assertIn("人工查看", data["识别状态"])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            source, output = self.fixture(Path(temporary))
+            partial_result = SimpleNamespace(txts=None, boxes=[], scores=[])
+            with (
+                mock.patch.object(MODULE, "check_runtime", return_value={"model_paths": MODEL_PATHS}),
+                mock.patch.object(MODULE, "_recognize_without_python_socket_access", return_value=partial_result),
+            ):
+                with self.assertRaisesRegex(ValueError, "识别字段不完整"):
+                    MODULE.run(source, output)
+            self.assertFalse(output.exists())
+            self.assertEqual(list(Path(temporary).glob(".ledger-ocr-*")), [])
 
     def test_write_and_readback_failures_leave_no_final_or_temporary_file(self):
         for failure in ("write", "readback"):
