@@ -107,7 +107,7 @@ class NumericMeasurement(unittest.TestCase):
             MODULE._draw_case(small_case, small)
             with Image.open(jpeg) as image:
                 self.assertEqual(image.format, "JPEG")
-                self.assertLess(image.width, 1600)
+                self.assertEqual(image.width, 1600)
             with Image.open(small) as image:
                 self.assertEqual(image.format, "PNG")
                 self.assertEqual(image.size, (800, 210))
