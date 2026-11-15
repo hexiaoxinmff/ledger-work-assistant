@@ -167,7 +167,7 @@ class GridOutputSafety(unittest.TestCase):
                 missing=list(workbook["未归属片段"].values)
                 self.assertEqual(missing[1][0:4],(1,2,"跨界文字",0.61))
                 self.assertIn("模型分数只作参考",workbook["来源"]["B5"].value)
-                self.assertIn("不能据此判断原图空白",workbook["来源"]["B8"].value)
+                self.assertIn("不能据此判断原图空白",workbook["来源"]["B9"].value)
             finally:
                 workbook.close()
             self.assertEqual(list(directory.glob(".ledger-pdf-review-*")),[])
