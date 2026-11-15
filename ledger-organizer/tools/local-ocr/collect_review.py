@@ -31,7 +31,7 @@ def run(pdf,pages_dir,reviewed,output):
  if manifest.get('source_sha256')!=pdfhash:raise ValueError('PDF 来源哈希不一致')
  pages=manifest.get('pages');count=manifest.get('page_count')
  if type(count) is not int or not 1<=count<=20 or not isinstance(pages,list) or len(pages)!=count:raise ValueError('页数无效')
- expected=[];expected_fragments=[];proof=[];expected_provenance={"PDF SHA-256":pdfhash,"页面清单 SHA-256":manhash}
+ expected=[];expected_fragments=[];expected_page_statuses=[];proof=[];expected_provenance={"PDF SHA-256":pdfhash,"页面清单 SHA-256":manhash}
  for i,item in enumerate(pages,1):
   name=f'page_{i:04d}.png'
   if item.get('page')!=i or item.get('image')!=name:raise ValueError('页面顺序无效')
@@ -44,6 +44,14 @@ def run(pdf,pages_dir,reviewed,output):
   rows,cols,cells,unassigned,ocr_count=g.get('行数'),g.get('列数'),g.get('单元格'),g.get('未归属片段'),g.get('OCR识别条数')
   if type(rows) is not int or type(cols) is not int or not 1<=rows<=100 or not 1<=cols<=30 or not isinstance(cells,list) or len(cells)!=rows*cols or not isinstance(unassigned,list) or type(ocr_count) is not int or ocr_count<0 or not isinstance(ocr_rows,list) or len(ocr_rows)!=ocr_count:
    raise ValueError('网格数据无效或缺少完整 OCR 片段计数')
+  ocr_status=o.get('识别状态')
+  if ocr_status is None:ocr_status='旧版 OCR 缺少识别状态；不能据此判断原图空白，需人工查看'
+  grid_status=g.get('OCR识别状态')
+  if grid_status is None:grid_status='旧版 OCR 网格缺少识别状态；不能据此判断原图空白，需人工查看'
+  if not isinstance(ocr_status,str) or not ocr_status.strip() or grid_status!=ocr_status:raise ValueError('OCR 识别状态与网格状态不一致')
+  if ocr_count==0 and not ocr_status.startswith(('未检出','旧版 OCR')):raise ValueError('零条 OCR 结果状态不匹配')
+  if ocr_count>0 and not ocr_status.startswith(('已检出','旧版 OCR')):raise ValueError('非空 OCR 结果状态不匹配')
+  expected_page_statuses.append((f'第{i}页 OCR 识别状态',ocr_status))
   if unassigned:raise ValueError('存在未归属片段，不能汇总为已完成复核')
   seen=set();page_fragments=[]
   for c in cells:
@@ -112,6 +120,7 @@ def run(pdf,pages_dir,reviewed,output):
   provenance_sheet.append(list(row))
   provenance_sheet.cell(provenance_sheet.max_row,6).data_type='s'
  info=output_w.create_sheet('说明');info.append(['项目','内容']);info.append(['来源PDF SHA-256',pdfhash]);info.append(['复核表 SHA-256',reviewhash]);info.append(['页面清单 SHA-256',manhash]);info.append(['无法辨认数量',unresolved]);info.append(['OCR 片段数量',len(expected_fragments)]);info.append(['说明','人工选择由使用者声明，工具无法验证是否真的看过原件；模型分数只作参考，不是财务核准'])
+ for row in expected_page_statuses:info.append(list(row))
  fd,tempname=tempfile.mkstemp(prefix='.ledger-review-',suffix='.tmp',dir=output.parent)
  try:
   with os.fdopen(fd,'wb') as f:output_w.save(f)
@@ -120,6 +129,7 @@ def run(pdf,pages_dir,reviewed,output):
    try:
     if list(verify['复核记录'].values)[1:]!=decisions:raise ValueError('复核记录回读不一致')
     if list(verify['OCR片段来源'].values)[1:]!=expected_fragments:raise ValueError('OCR 片段来源回读不一致')
+    if list(verify['说明'].values)[7:]!=[list(row) for row in expected_page_statuses]:raise ValueError('页面 OCR 识别状态回读不一致')
    finally:verify.close()
   if sha(pdf)!=pdfhash or sha(reviewed)!=reviewhash or sha(manifestfile)!=manhash or any(sha(x)!=h for x,h in proof):raise ValueError('输入处理期间变化')
   os.link(tempname,output)
