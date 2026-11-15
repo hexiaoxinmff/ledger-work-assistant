@@ -4,6 +4,7 @@ import hashlib
 import importlib.metadata as metadata
 import importlib.util
 import json
+import math
 import os
 import socket
 import tempfile
@@ -70,6 +71,40 @@ def _recognize_without_python_socket_access(source, model_paths):
         socket.socket.connect = original_connect
         socket.socket.connect_ex = original_connect_ex
     return result
+
+
+def _finite_float(value, label):
+    if isinstance(value, bool):
+        raise ValueError(label)
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(label) from exc
+    if not math.isfinite(number):
+        raise ValueError(label)
+    return number
+
+
+def _validated_box(box):
+    try:
+        points = list(box)
+    except TypeError as exc:
+        raise ValueError("OCR 边界框格式无效") from exc
+    if len(points) != 4:
+        raise ValueError("OCR 边界框必须包含四个角点")
+    validated = []
+    for point in points:
+        try:
+            coordinates = list(point)
+        except TypeError as exc:
+            raise ValueError("OCR 边界框格式无效") from exc
+        if len(coordinates) != 2:
+            raise ValueError("OCR 边界框必须使用二维坐标")
+        validated.append([
+            round(_finite_float(coordinates[0], "OCR 边界框坐标必须为有限数"), 2),
+            round(_finite_float(coordinates[1], "OCR 边界框坐标必须为有限数"), 2),
+        ])
+    return validated
 
 
 def run(source, output):
