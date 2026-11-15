@@ -125,8 +125,8 @@ RapidOCR 3.10.0 可对无有效输出返回 `RapidOCROutput()`; 输出结构中�
 单图识别有检测结果时，使用 RapidOCR 返回的原始处理图像尺寸（包括上游图片加载器执行 EXIF 方向校正后的尺寸）校验每个像素坐标均落在图像边界内；引擎没有返回图像尺寸、坐标越界或数值无效时停止发布 JSON，不裁剪或修正坐标。零检测结果不要求边界框尺寸。此校验仅防止无效位置进入后续网格映射，不证明 OCR 文字正确或位置准确。回归使用虚构图像和伪引擎，不运行真实 OCR。上游依据：RapidOCR v3.10.0 的 [图片加载器](https://github.com/RapidAI/RapidOCR/blob/v3.10.0/python/rapidocr/utils/load_image.py)对文件输入执行 EXIF 方向校正，并在 [输出构造](https://github.com/RapidAI/RapidOCR/blob/v3.10.0/python/rapidocr/main.py)保留处理后的原始图像。
 
 
-## v0.70 固定 OCR 模型准备与 CI 真实推理
+## v0.71 固定 OCR 模型准备与合成数字测量
 
 `python tools/local-ocr/prepare_models.py` 仅支持 rapidocr 3.10.0，自动定位已安装包内的 models 目录并要求该目录已存在。它通过固定 URL 逐个下载 PP-OCRv6 detection/recognition small 与 PP-OCRv4 mobile direction 模型，限制单文件 512 MiB，流式计算 SHA-256，匹配内置哈希后用硬链接独占发布；已有正确模型跳过，已有不匹配文件、哈希错误、下载中断或目标文件竞争时停止且清理暂存文件。仅用户主动调用才联网；不能把下载成功当作模型能正确识别。
 
-GitHub Actions 的 OCR pinned model smoke workflow 在 Ubuntu/Python 3.12 安装固定运行时、调用上述准备器，并在合成图片中实际调用 RapidOCR 固定模型识别 `00042`，检查文本完全匹配且输出仍标待人工核对。该流程验证受控环境下真实模型加载和一次数字推理，不代表真实票据精度、Windows 本机运行、模型识别普遍可靠或隐私/网络隔离；CI 只向推理器提供临时生成的虚构图片。
+GitHub Actions 的 OCR pinned model smoke workflow 在 Ubuntu/Python 3.12 安装固定运行时、调用上述准备器，并在合成图片中实际调用 RapidOCR 固定模型识别 `00042`。随后 `real_model_numeric_eval.py` 对 8 个单行虚构样例做观察性测量，覆盖 `0.00`、`1,234.56`、`(88.00)`、`-1,234.56`、前导零编号、长编号、ISO 日期和连续数字；记录完全匹配率、字符错误率、每例识别结果及合成图 SHA-256。结果显示在 Actions 摘要并作为 7 天 artifact 保存。该测量不会因个别识别不一致而让工作流失败，工作流通过只证明模型能运行且测量已完成，不代表真实票据精度、Windows 本机运行、模型识别普遍可靠或隐私/网络隔离；CI 只向推理器提供临时生成的虚构图片。所有识别结果都必须人工对照原图，测量分数不得用于自动确认。
