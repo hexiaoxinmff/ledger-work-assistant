@@ -12,6 +12,24 @@ render=load('render_pdf');export=load('export_pdf_review')
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 
 class PdfReview(unittest.TestCase):
+ def test_pdf_size_limit_precedes_hashing_and_pdfium(self):
+  with tempfile.TemporaryDirectory() as t:
+   d=Path(t);pdf=d/'oversized.pdf';out=d/'pages';pdf.write_bytes(b'larger than one byte')
+   with patch.object(render,'MAX_PDF_BYTES',1):
+    with patch.object(render,'sha') as digest:
+     with patch.object(render.pdfium,'PdfDocument') as document:
+      with self.assertRaisesRegex(ValueError,'PDF 文件超过'):
+       render.run(pdf,out)
+      digest.assert_not_called();document.assert_not_called()
+   self.assertFalse(out.exists())
+
+ def test_pdf_hash_rejects_growth_after_initial_size_check(self):
+  with tempfile.TemporaryDirectory() as t:
+   pdf=Path(t)/'changed.pdf';pdf.write_bytes(b'larger than limit')
+   with patch.object(render.os.path,'getsize',return_value=1):
+    with self.assertRaisesRegex(ValueError,'哈希期间超过'):
+     render.sha(pdf,max_bytes=1)
+
  def test_page_provenance_and_missing_page(self):
   with tempfile.TemporaryDirectory() as t:
    d=Path(t);pdf=d/'sample.pdf';pages=d/'pages';out=d/'review.xlsx'
