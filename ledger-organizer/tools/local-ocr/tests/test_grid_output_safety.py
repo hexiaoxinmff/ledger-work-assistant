@@ -275,5 +275,15 @@ class GridOutputSafety(unittest.TestCase):
             self.assertEqual(list(directory.glob(".ledger-grid-review-*")), [])
 
 
+class CollectorProvenanceRegression(unittest.TestCase):
+    def test_collect_review_provenance_suite(self):
+        import test_collect_review
+        suite = unittest.defaultTestLoader.loadTestsFromTestCase(
+            test_collect_review.CollectReviewProvenance
+        )
+        result = unittest.TextTestRunner(verbosity=2).run(suite)
+        self.assertTrue(result.wasSuccessful(), "collector provenance regressions failed")
+
+
 if __name__ == "__main__":
     unittest.main()
