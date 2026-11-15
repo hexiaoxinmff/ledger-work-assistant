@@ -59,14 +59,26 @@ def map_table(image, ocrfile, output):
     if not output.parent.is_dir():raise FileNotFoundError(f'输出目录不存在：{output.parent}')
     if os.path.lexists(output):raise FileExistsError(output)
     imagehash=sha(image);ocrhash=sha(ocrfile);raw=json.loads(ocrfile.read_text(encoding='utf8'))
-    if raw.get('来源sha256')!=imagehash or not isinstance(raw.get('结果'),list):raise ValueError('OCR 结果与原图哈希不一致或格式无效')
+    results=raw.get('结果')
+    if raw.get('来源sha256')!=imagehash or not isinstance(results,list):raise ValueError('OCR 结果与原图哈希不一致或格式无效')
+    ocr_count=raw.get('识别条数',len(results))
+    if type(ocr_count) is not int or ocr_count!=len(results):raise ValueError('OCR 识别条数与结果列表不一致')
+    ocr_status=raw.get('识别状态')
+    if ocr_status is None:
+        ocr_status='旧版 OCR 缺少识别状态；不能据此判断原图空白，需人工查看'
+    elif not isinstance(ocr_status,str) or not ocr_status.strip():
+        raise ValueError('OCR 识别状态无效')
+    if ocr_count==0 and not ocr_status.startswith(('未检出','旧版 OCR')):
+        raise ValueError('零条 OCR 结果必须标记为未检出候选或旧版状态未知')
+    if ocr_count>0 and not ocr_status.startswith(('已检出','旧版 OCR')):
+        raise ValueError('非空 OCR 结果的识别状态不匹配')
     arr=np.fromfile(str(image),dtype=np.uint8);img=cv2.imdecode(arr,cv2.IMREAD_COLOR)
     if img is None:raise ValueError('无法读取图片')
     xs,ys=lines(img);cells=[]
     for ri,(y1,y2) in enumerate(zip(ys,ys[1:]),1):
         for ci,(x1,x2) in enumerate(zip(xs,xs[1:]),1):cells.append({'行':ri,'列':ci,'边界_像素':[x1,y1,x2,y2],'片段':[],'复核状态':'待人工核对原图'})
     unassigned=[]
-    for result_index,item in enumerate(raw['结果'],1):
+    for result_index,item in enumerate(results,1):
         box=item.get('位置_像素');text=item.get('识别文本');score=item.get('模型分数')
         if not isinstance(box,list) or len(box)!=4 or not isinstance(text,str) or len(text)>32767:
             raise ValueError('OCR 识别框或文本格式无效')
@@ -85,7 +97,7 @@ def map_table(image, ocrfile, output):
         c['识别文本']=' '.join(x['识别文本'] for x in c['片段'])
     data={'用途':'仅虚构样例，自动网格及所有识别结果均须人工复核；空白格不代表原图为空',
           '来源文件名':image.name,'来源sha256':imagehash,'OCR结果sha256':ocrhash,
-          '行数':len(ys)-1,'列数':len(xs)-1,'OCR识别条数':len(raw['结果']),'单元格':cells,'未归属片段':unassigned}
+          '行数':len(ys)-1,'列数':len(xs)-1,'OCR识别条数':ocr_count,'OCR识别状态':ocr_status,'单元格':cells,'未归属片段':unassigned}
     if sha(image)!=imagehash or sha(ocrfile)!=ocrhash:raise ValueError('输入文件在处理期间发生变化')
     fd,temporary=tempfile.mkstemp(prefix='.ledger-grid-',suffix='.json.tmp',dir=output.parent)
     try:

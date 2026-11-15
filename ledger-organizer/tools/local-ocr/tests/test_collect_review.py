@@ -96,6 +96,8 @@ class CollectReviewProvenance(unittest.TestCase):
                 self.assertEqual(workbook["说明"]["B6"].value, 1)
                 self.assertEqual(workbook["复核记录"]["D2"].value, "00042")
                 self.assertEqual(workbook["复核记录"]["F2"].value, "00042")
+                self.assertEqual(workbook["说明"]["A8"].value, "第1页 OCR 识别状态")
+                self.assertIn("不能据此判断原图空白", workbook["说明"]["B8"].value)
             finally:
                 workbook.close()
 
