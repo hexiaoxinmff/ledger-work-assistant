@@ -94,7 +94,8 @@ def run(image,table_json,output):
             try:
                 if list(check['逐格复核'].values)[1:]!=expected:raise ValueError('复核清单回读不一致')
                 for row,col,text,_,_ in expected:
-                    if check['待核对表格'].cell(row,col).value!=text:raise ValueError('表格回读不一致')
+                    actual=check['待核对表格'].cell(row,col).value
+                    if (actual if actual is not None else '')!=text:raise ValueError('表格回读不一致')
                 actual_detail=list(check['识别片段明细'].values)[1:]
                 if actual_detail!=detail_rows:raise ValueError('OCR 片段明细回读不一致')
                 actual_other=list(check['未归属片段'].values)[1:]
