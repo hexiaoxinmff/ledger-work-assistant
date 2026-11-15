@@ -17,7 +17,7 @@ def _unsafe_csv_formula_text(value):
         return True
     if candidate.startswith(('=', '+', '@', '＝', '＋', '－', '＠')):
         return True
-    if candidate.startswith('-') and not re.fullmatch(r'-\d+(?:\.\d+)?', candidate):
+    if candidate.startswith('-') and not re.fullmatch(r'-(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?', candidate):
         return True
     return False
 
