@@ -17,7 +17,7 @@ HERE = Path(__file__).resolve().parents[1]
 def load_grid():
     cv2 = types.ModuleType("cv2")
     cv2.IMREAD_COLOR = 1
-    cv2.imdecode = lambda *_: object()
+    cv2.imdecode = lambda *_: types.SimpleNamespace(shape=(200, 300, 3))
     numpy = types.ModuleType("numpy")
     numpy.uint8 = object()
     numpy.fromfile = lambda *_args, **_kwargs: object()

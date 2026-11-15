@@ -4,7 +4,7 @@
 
 ## 安装和使用
 
-当前技能版本：v0.81。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
+当前技能版本：v0.82。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
 
 本机虚构回归入口：`python ledger-organizer/tools/run_checks.py`。默认执行基础环境/样例/转换/Word 提取测试；对账业务规则测试用 `--suite ledger`（需预装 pandas、openpyxl、PyYAML），PDF 文字层转表测试用 `--suite pdf-text`（需预装 pypdfium2、openpyxl），OCR 相关测试用 `--suite ocr`，全部用 `--suite all`。各组依赖须事先满足，报告保留失败、超时和未运行项目，不能将部分通过当成全功能通过。这些测试不包含真实账目、平台自主调用、界面或 OCR 准确率验收。
 
@@ -58,7 +58,7 @@ python ledger-organizer/tools/format-conversion/convert_table.py ledger-organize
 
 虚构 OCR 输出可用 `ledger-organizer/tools/local-ocr/evaluate_accuracy.py` 与真值清单评分，统计金额/日期/编号的完全匹配率、CER 和漏/多识别行；评分结果仍全部待人工复核，不能用于确认真实数据。
 
-实验功能可对单张简单线框表格图片尝试定位网格并导出复核工作簿；仅限虚构样例，依赖 OCR/OpenCV 和 openpyxl。所有识别内容及空格需对原图人工核对，多页 PDF 和复杂表格暂不保证支持。详见 `ledger-organizer/references/local-ocr.md`。
+实验功能可对单张简单线框表格图片尝试定位网格并导出复核工作簿；OCR 坐标会检查四角结构、有限数值、图片范围及正面积，异常时不生成网格文件；仅限虚构样例，依赖 OCR/OpenCV 和 openpyxl。所有识别内容及空格需对原图人工核对，多页 PDF 和复杂表格暂不保证支持。详见 `ledger-organizer/references/local-ocr.md`。
 
 实验功能还可尝试 1–20 页、每页一个简单线框表的虚构 PDF，输出带页码的复核工作簿和中间页面文件；任何页面失败会停止，所有格子必须人工核对。依赖、隐私和适用范围见 `ledger-organizer/references/local-ocr.md`。
 
