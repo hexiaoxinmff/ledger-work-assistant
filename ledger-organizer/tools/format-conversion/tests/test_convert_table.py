@@ -94,11 +94,11 @@ class ConvertTable(unittest.TestCase):
     with self.assertRaisesRegex(ValueError,'simulated xlsx readback failure'):module.run(str(csv_source),str(xlsx_output))
    self.assertFalse(xlsx_output.exists());self.assertEqual(list(directory.glob('.ledger-conversion-*.tmp')),[])
    real_sha=module.sha;source_checks=[]
-   def changed_source(path):
+   def changed_source(path,max_bytes=None):
     if Path(path).resolve()==csv_source.resolve():
      source_checks.append(1)
      if len(source_checks)==2:return 'changed'
-    return real_sha(path)
+    return real_sha(path,max_bytes)
    with patch.object(module,'sha',side_effect=changed_source):
     with self.assertRaisesRegex(ValueError,'源文件发生变化'):module.run(str(csv_source),str(xlsx_output))
    self.assertFalse(xlsx_output.exists());self.assertEqual(list(directory.glob('.ledger-conversion-*.tmp')),[])
