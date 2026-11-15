@@ -158,7 +158,7 @@ class GridOutputSafety(unittest.TestCase):
 
     def test_invalid_ocr_scores_stop_grid_mapping(self):
         import math
-        for score in (None, -0.1, 1.1, "0.9", math.nan, True):
+        for score in (None, -0.1, 1.1, "0.9", math.nan, True, 10 ** 1000):
             with self.subTest(score=score), tempfile.TemporaryDirectory() as temporary:
                 directory=Path(temporary);image,ocr,output,_=self.fixtures(directory)
                 raw=json.loads(ocr.read_text(encoding="utf8"))
@@ -169,6 +169,30 @@ class GridOutputSafety(unittest.TestCase):
                         GRID.map_table(image,ocr,output)
                 self.assertFalse(output.exists())
                 self.assertEqual(list(directory.glob(".ledger-grid-*")),[])
+
+    def test_invalid_ocr_coordinate_boxes_stop_before_grid_publication(self):
+        import math
+        invalid_boxes = [
+            [[20, 20], [30, 20], [30, 30]],  # not four corners
+            [[True, 20], [30, 20], [30, 30], [20, 30]],  # bool is not numeric evidence
+            [[math.nan, 20], [30, 20], [30, 30], [20, 30]],
+            [[-1, 20], [30, 20], [30, 30], [20, 30]],  # outside the image
+            [[20, 20], [20, 20], [20, 20], [20, 20]],  # zero area
+            [[20], [30, 20], [30, 30], [20, 30]],  # malformed point
+            [[10 ** 1000, 20], [30, 20], [30, 30], [20, 30]],  # float overflow
+        ]
+        for index, box in enumerate(invalid_boxes):
+            with self.subTest(index=index), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                image, ocr, output, _ = self.fixtures(directory)
+                raw = json.loads(ocr.read_text(encoding="utf8"))
+                raw["结果"][0]["位置_像素"] = box
+                ocr.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf8")
+                with mock.patch.object(GRID, "lines", return_value=([10, 100], [10, 100])):
+                    with self.assertRaises(ValueError):
+                        GRID.map_table(image, ocr, output)
+                self.assertFalse(output.exists())
+                self.assertEqual(list(directory.glob(".ledger-grid-*")), [])
 
     def test_review_export_rejects_missing_or_duplicate_fragment_indexes(self):
         for corruption in ("missing","duplicate"):
