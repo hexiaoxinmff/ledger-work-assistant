@@ -156,13 +156,14 @@ def _recognize_without_python_socket_access(source, model_paths):
         socket.socket.connect = deny
         socket.socket.connect_ex = deny
         from rapidocr import RapidOCR
+        from rapidocr.utils.typings import EngineType
 
         params = {
-            "Det.engine_type": "onnxruntime",
+            "Det.engine_type": EngineType.ONNXRUNTIME,
             "Det.model_path": model_paths["PP-OCRv6_det_small.onnx"],
-            "Cls.engine_type": "onnxruntime",
+            "Cls.engine_type": EngineType.ONNXRUNTIME,
             "Cls.model_path": model_paths["ch_ppocr_mobile_v2.0_cls_mobile.onnx"],
-            "Rec.engine_type": "onnxruntime",
+            "Rec.engine_type": EngineType.ONNXRUNTIME,
             "Rec.model_path": model_paths["PP-OCRv6_rec_small.onnx"],
         }
         result = RapidOCR(params=params)(str(source))
