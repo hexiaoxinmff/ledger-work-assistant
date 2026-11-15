@@ -188,23 +188,24 @@ class GridOutputSafety(unittest.TestCase):
                     return types.SimpleNamespace(st_size=1)
                 return original_stat(path, *args, **kwargs)
 
-            with mock.patch.object(GRID, "MAX_OCR_JSON_BYTES", 8), \\
-                    mock.patch.object(GRID.Path, "stat", new=report_stale_small_size), \\
-                    mock.patch.object(GRID.cv2, "imdecode") as decode:
-                with self.assertRaisesRegex(ValueError, "OCR JSON"):
-                    GRID.map_table(image, ocr, output)
-                decode.assert_not_called()
+            with mock.patch.object(GRID, "MAX_OCR_JSON_BYTES", 8):
+                with mock.patch.object(GRID.Path, "stat", new=report_stale_small_size):
+                    with mock.patch.object(GRID.cv2, "imdecode") as decode:
+                        with self.assertRaisesRegex(ValueError, "OCR JSON"):
+                            GRID.map_table(image, ocr, output)
+                        decode.assert_not_called()
             self.assertFalse(output.exists())
 
     def test_decoded_image_dimensions_must_match_header(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             image, ocr, output, _ = self.fixtures(directory)
-            with mock.patch.object(GRID.cv2, "imdecode", return_value=types.SimpleNamespace(shape=(201, 300, 3))), \\
-                    mock.patch.object(GRID, "lines") as find_lines:
-                with self.assertRaisesRegex(ValueError, "头尺寸与解码尺寸不一致"):
-                    GRID.map_table(image, ocr, output)
-                find_lines.assert_not_called()
+            fake_image = types.SimpleNamespace(shape=(201, 300, 3))
+            with mock.patch.object(GRID.cv2, "imdecode", return_value=fake_image):
+                with mock.patch.object(GRID, "lines") as find_lines:
+                    with self.assertRaisesRegex(ValueError, "头尺寸与解码尺寸不一致"):
+                        GRID.map_table(image, ocr, output)
+                    find_lines.assert_not_called()
             self.assertFalse(output.exists())
 
     def test_no_detection_status_survives_grid_and_single_image_review(self):
