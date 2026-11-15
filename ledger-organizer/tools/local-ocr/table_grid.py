@@ -21,7 +21,7 @@ def sha(path, max_bytes=MAX_IMAGE_BYTES):
     return h.hexdigest()
 
 
-def read_bounded(path, max_bytes):
+def read_bounded(path, max_bytes, label="文件"):
     chunks=[]
     total=0
     with open(path,'rb') as f:
@@ -31,7 +31,7 @@ def read_bounded(path, max_bytes):
             chunks.append(chunk)
             total += len(chunk)
     if total > max_bytes:
-        raise ValueError('OCR JSON 超过 25 MiB 上限')
+        raise ValueError(f'{label} 超过读取上限')
     return b''.join(chunks)
 
 
@@ -110,7 +110,7 @@ def map_table(image, ocrfile, output):
     image_info=preflight_image(image)
     if ocrfile.stat().st_size>MAX_OCR_JSON_BYTES:raise ValueError('OCR JSON 超过 25 MiB 上限')
     imagehash=sha(image, MAX_IMAGE_BYTES)
-    ocr_bytes=read_bounded(ocrfile, MAX_OCR_JSON_BYTES)
+    ocr_bytes=read_bounded(ocrfile, MAX_OCR_JSON_BYTES, 'OCR JSON')
     ocrhash=hashlib.sha256(ocr_bytes).hexdigest()
     raw=json.loads(ocr_bytes.decode('utf8'))
     results=raw.get('结果')
@@ -127,7 +127,9 @@ def map_table(image, ocrfile, output):
         raise ValueError('零条 OCR 结果必须标记为未检出候选或旧版状态未知')
     if ocr_count>0 and not ocr_status.startswith(('已检出','旧版 OCR')):
         raise ValueError('非空 OCR 结果的识别状态不匹配')
-    arr=np.fromfile(str(image),dtype=np.uint8);img=cv2.imdecode(arr,cv2.IMREAD_COLOR)
+    image_bytes=read_bounded(image, MAX_IMAGE_BYTES, '图片')
+    if hashlib.sha256(image_bytes).hexdigest()!=imagehash:raise ValueError('图片在处理期间发生变化')
+    arr=np.frombuffer(image_bytes,dtype=np.uint8);img=cv2.imdecode(arr,cv2.IMREAD_COLOR)
     if img is None:raise ValueError('无法读取图片')
     if img.shape[1]!=image_info['width'] or img.shape[0]!=image_info['height']:raise ValueError('图片头尺寸与解码尺寸不一致')
     xs,ys=lines(img);cells=[]
