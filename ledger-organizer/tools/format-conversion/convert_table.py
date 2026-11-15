@@ -1,5 +1,5 @@
 """Local CSV/XLSX value conversion, with explicit limits and verification."""
-import argparse, csv, hashlib, os, re, tempfile
+import argparse, csv, hashlib, os, re, tempfile, unicodedata
 from openpyxl import Workbook, load_workbook
 
 
@@ -13,9 +13,10 @@ def sha(path):
 def _unsafe_csv_formula_text(value):
     candidate = value.lstrip()
     leading = value[:len(value) - len(candidate)]
+    candidate = unicodedata.normalize('NFKC', candidate)
     if any(ord(char) < 0x20 for char in leading):
         return True
-    if candidate.startswith(('=', '+', '@', '＝', '＋', '－', '＠')):
+    if candidate.startswith(('=', '+', '@')):
         return True
     if candidate.startswith('-') and not re.fullmatch(r'-(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?', candidate):
         return True
