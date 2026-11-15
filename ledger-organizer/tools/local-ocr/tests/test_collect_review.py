@@ -24,7 +24,7 @@ def png_header(width=300, height=200):
     kind = b"IHDR"
     payload = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
     crc = zlib.crc32(kind + payload) & 0xFFFFFFFF
-    return b"\\x89PNG\\r\\n\\x1a\\n" + struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", crc)
+    return b"\x89PNG\r\n\x1a\n" + struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", crc)
 
 def load_grid():
     cv2 = types.ModuleType("cv2")
