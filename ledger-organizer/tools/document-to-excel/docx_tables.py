@@ -44,6 +44,16 @@ def extract(path):
             for ci, cell in enumerate(row.findall(W + "tc"), 1):
                 if any(cell.findall(".//" + W + tag) for tag in ("drawing", "pict", "object", "instrText", "fldSimple", "tab", "br", "cr", "ins", "del")):
                     raise ValueError("表格包含图片、域、制表符、换行或修订，无法安全提取")
+                # Word may encode visible or semantically meaningful run content
+                # outside w:t (for example noBreakHyphen/softHyphen). Refuse
+                # unknown run children so identifiers/numbers are never silently joined.
+                for run in cell.iter(W + "r"):
+                    for child in run:
+                        if child.tag not in (W + "rPr", W + "t"):
+                            local = child.tag.rsplit("}", 1)[-1]
+                            raise ValueError(f"表格包含不支持的 Word 行内节点 {local}，无法保证原文完整；请人工确认转换方式")
+                if cell.find(".//{http://schemas.openxmlformats.org/markup-compatibility/2006}AlternateContent") is not None:
+                    raise ValueError("表格包含 Word AlternateContent 替代内容，无法保证原文完整；请人工确认转换方式")
                 paragraphs = ["".join(n.text or "" for n in para.iter(W + "t")) for para in cell.findall(W + "p")]
                 text = "\n".join(paragraphs)
                 if len(text) > 32767: raise ValueError("单元格文字超出 Excel 容量")
