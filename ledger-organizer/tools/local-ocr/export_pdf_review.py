@@ -57,6 +57,9 @@ def run(pdf,pages_dir,output,embed_previews=False):
   if ocr_data.get('来源sha256')!=imgsha or g.get('来源sha256')!=imgsha or g.get('OCR结果sha256')!=ocrsha:raise ValueError('页面识别结果不匹配')
   rows,cols=g.get('行数'),g.get('列数');cells=g.get('单元格');unassigned=g.get('未归属片段');ocr_count=g.get('OCR识别条数')
   if type(rows) is not int or type(cols) is not int or not 1<=rows<=100 or not 1<=cols<=30 or not isinstance(cells,list) or len(cells)!=rows*cols or not isinstance(unassigned,list) or type(ocr_count) is not int or ocr_count<0:raise ValueError('网格数据无效或缺少 OCR 识别条数')
+  ocr_results=ocr_data.get('结果')
+  raw_count=ocr_data.get('识别条数',len(ocr_results) if isinstance(ocr_results,list) else None)
+  if not isinstance(ocr_results,list) or len(ocr_results)!=ocr_count or type(raw_count) is not int or raw_count!=ocr_count:raise ValueError('OCR 原始结果条数与网格条数不一致')
   ocr_status=ocr_data.get('识别状态')
   if ocr_status is None:ocr_status='旧版 OCR 缺少识别状态；不能据此判断原图空白，需人工查看'
   grid_status=g.get('OCR识别状态',ocr_status)
