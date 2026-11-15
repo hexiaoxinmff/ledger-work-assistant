@@ -201,6 +201,28 @@ class ConvertTable(unittest.TestCase):
     loader.assert_not_called()
    self.assertFalse(output.exists())
 
+ def test_source_size_limits_run_before_hashing(self):
+  cases=[("input.csv","MAX_CSV_BYTES"),("input.xlsx","MAX_XLSX_BYTES")]
+  for filename,limit_name in cases:
+   with self.subTest(filename=filename),tempfile.TemporaryDirectory() as temporary:
+    directory=Path(temporary);source=directory/filename
+    source.write_bytes(b"larger than one byte")
+    output=directory/("output.xlsx" if filename.endswith(".csv") else "output.csv")
+    with patch.object(module,limit_name,1):
+     with patch.object(module,"sha") as digest:
+      with self.assertRaisesRegex(ValueError,"超过"):
+       module.run(str(source),str(output))
+      digest.assert_not_called()
+    self.assertFalse(output.exists())
+
+ def test_sha_rejects_growth_after_initial_size_check(self):
+  with tempfile.TemporaryDirectory() as temporary:
+   source=Path(temporary)/"changed.csv"
+   source.write_bytes(b"larger than one byte")
+   with patch.object(module.os.path,"getsize",return_value=1):
+    with self.assertRaisesRegex(ValueError,"哈希期间超过"):
+     module.sha(source,max_bytes=1)
+
  def test_xlsx_to_csv_streams_rows_and_verifies_roundtrip(self):
   with tempfile.TemporaryDirectory() as tmp:
    directory=Path(tmp);source=directory/'source.xlsx';output=directory/'output.csv'
