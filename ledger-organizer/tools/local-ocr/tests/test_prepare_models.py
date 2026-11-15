@@ -28,9 +28,10 @@ class PrepareModelTests(unittest.TestCase):
         with (
             mock.patch.object(MODULE.importlib.metadata, "version", return_value="3.10.0"),
             mock.patch.object(MODULE, "MODELS", self.details),
+            mock.patch.object(MODULE, "package_model_dir", return_value=directory),
             mock.patch.object(MODULE, "urlopen", return_value=response) as opener,
         ):
-            result = MODULE.prepare(directory)
+            result = MODULE.prepare()
         return result, opener
 
     def test_download_publishes_only_hash_verified_file(self):
@@ -47,10 +48,11 @@ class PrepareModelTests(unittest.TestCase):
             with (
                 mock.patch.object(MODULE.importlib.metadata, "version", return_value="3.10.0"),
                 mock.patch.object(MODULE, "MODELS", self.details),
+                mock.patch.object(MODULE, "package_model_dir", return_value=Path(temporary)),
                 mock.patch.object(MODULE, "urlopen", return_value=BytesIO(b"tampered")),
             ):
                 with self.assertRaisesRegex(ValueError, "SHA-256 不符"):
-                    MODULE.prepare(Path(temporary))
+                    MODULE.prepare()
             self.assertFalse((Path(temporary) / "sample.onnx").exists())
             self.assertEqual(list(Path(temporary).glob(".ledger-model-*")), [])
 
@@ -61,9 +63,10 @@ class PrepareModelTests(unittest.TestCase):
             with (
                 mock.patch.object(MODULE.importlib.metadata, "version", return_value="3.10.0"),
                 mock.patch.object(MODULE, "MODELS", self.details),
+                mock.patch.object(MODULE, "package_model_dir", return_value=Path(temporary)),
                 mock.patch.object(MODULE, "urlopen") as opener,
             ):
-                result = MODULE.prepare(Path(temporary))
+                result = MODULE.prepare()
             opener.assert_not_called()
             self.assertEqual(result[0]["status"], "already_verified")
 
@@ -77,7 +80,7 @@ class PrepareModelTests(unittest.TestCase):
                 mock.patch.object(MODULE, "urlopen") as opener,
             ):
                 with self.assertRaisesRegex(ValueError, "拒绝覆盖"):
-                    MODULE.prepare(Path(temporary))
+                    MODULE.prepare()
             opener.assert_not_called()
             self.assertEqual(target.read_bytes(), b"keep existing")
 
@@ -86,11 +89,12 @@ class PrepareModelTests(unittest.TestCase):
             with (
                 mock.patch.object(MODULE.importlib.metadata, "version", return_value="3.10.0"),
                 mock.patch.object(MODULE, "MODELS", self.details),
+                mock.patch.object(MODULE, "package_model_dir", return_value=Path(temporary)),
                 mock.patch.object(MODULE, "MAX_MODEL_BYTES", 4),
                 mock.patch.object(MODULE, "urlopen", return_value=BytesIO(self.payload)),
             ):
                 with self.assertRaisesRegex(ValueError, "单文件上限"):
-                    MODULE.prepare(Path(temporary))
+                    MODULE.prepare()
             self.assertEqual(list(Path(temporary).glob(".ledger-model-*")), [])
 
     def test_wrong_runtime_version_stops_before_network(self):
@@ -100,7 +104,7 @@ class PrepareModelTests(unittest.TestCase):
                 mock.patch.object(MODULE, "urlopen") as opener,
             ):
                 with self.assertRaisesRegex(ValueError, "仅支持 rapidocr"):
-                    MODULE.prepare(Path(temporary))
+                    MODULE.prepare()
             opener.assert_not_called()
 
 
