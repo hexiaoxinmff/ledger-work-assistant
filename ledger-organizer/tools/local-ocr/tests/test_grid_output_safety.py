@@ -100,7 +100,7 @@ class GridOutputSafety(unittest.TestCase):
             workbook=load_workbook(review,read_only=True,data_only=False)
             try:
                 self.assertEqual(workbook["说明"]["B7"].value,status)
-                self.assertEqual(workbook["待核对表格"]["A1"].value,"")
+                self.assertIsNone(workbook["待核对表格"]["A1"].value)
                 self.assertEqual(workbook["逐格复核"]["E2"].value,"待人工核对原图")
             finally:
                 workbook.close()
