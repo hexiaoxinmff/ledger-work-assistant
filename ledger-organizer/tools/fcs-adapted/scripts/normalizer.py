@@ -18,18 +18,37 @@ def _clean(raw: str | None) -> str | None:
     return s or None
 
 
+_AMOUNT_RE = re.compile(r"^[+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)$")
+_CURRENCY_SYMBOLS = set("￥¥$")
+
+
 def parse_amount(raw: str | None, scale: int) -> tuple[Decimal | None, str | None]:
     s = _clean(raw)
     if s is None:
         return None, "非法金额"
-    s = s.replace(",", "").replace("￥", "").replace("¥", "").replace("$", "")
+    # Accept one currency marker at either edge; do not delete embedded or repeated
+    # symbols, since that could turn malformed source text into a different amount.
+    symbol_count = sum(char in _CURRENCY_SYMBOLS for char in s)
+    if symbol_count > 1:
+        return None, "非法金额"
+    if s[0] in _CURRENCY_SYMBOLS:
+        s = s[1:].strip()
+    elif s[-1] in _CURRENCY_SYMBOLS:
+        s = s[:-1].strip()
+    if any(char in _CURRENCY_SYMBOLS for char in s) or not _AMOUNT_RE.fullmatch(s):
+        return None, "非法金额"
     try:
-        value = Decimal(s).quantize(Decimal(1).scaleb(-scale), rounding=ROUND_HALF_UP)  # 四舍五入
+        value = Decimal(s.replace(",", ""))
+        if not value.is_finite():
+            return None, "非法金额"
+        quantized = value.quantize(Decimal(1).scaleb(-scale), rounding=ROUND_HALF_UP)
     except (InvalidOperation, ValueError):
         return None, "非法金额"
-    if not value.is_finite():   # 拒绝 NaN（Infinity 已在 quantize 抛错被拦）
-        return None, "非法金额"
-    return value, None
+    # Extra zero precision (1.230 at scale 2) is harmless; non-zero excess
+    # precision is left for human review instead of being silently rounded.
+    if quantized != value:
+        return None, "金额精度超出配置"
+    return quantized, None
 
 
 _DATE_FORMATS = ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%Y%m%d")
