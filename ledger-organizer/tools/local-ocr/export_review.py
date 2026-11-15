@@ -47,6 +47,9 @@ def run(image,table_json,output):
     imagehash=sha(image);jsonhash=sha(table_json);data=json.loads(table_json.read_text(encoding='utf8'))
     if data.get('来源sha256')!=imagehash:raise ValueError('原图和识别结果哈希不一致')
     rows,cols=data.get('行数'),data.get('列数');cells=data.get('单元格');unassigned=data.get('未归属片段');ocr_count=data.get('OCR识别条数')
+    ocr_status=data.get('OCR识别状态')
+    if ocr_status is None:ocr_status='旧版 OCR 网格缺少识别状态；不能据此判断原图空白，需人工查看'
+    if not isinstance(ocr_status,str) or not ocr_status.strip():raise ValueError('OCR 识别状态无效')
     if type(rows) is not int or type(cols) is not int or not (1<=rows<=100 and 1<=cols<=30) or not isinstance(cells,list) or len(cells)!=rows*cols or not isinstance(unassigned,list) or type(ocr_count) is not int or ocr_count<0:
         raise ValueError('网格数据无效或缺少 OCR 识别条数')
     w=Workbook()
@@ -82,7 +85,7 @@ def run(image,table_json,output):
         for fragment in unassigned:
             index,row,col,association,text,score,coordinate,status=_fragment_row(fragment,None,None,'未归属')
             other.append([index,text,score,coordinate,status]);other.cell(other.max_row,2).data_type='s'
-        note=w.create_sheet('说明');note.append(['项目','内容']);note.append(['原图文件名',image.name]);note.cell(2,2).data_type='s';note.append(['原图 SHA-256',imagehash]);note.append(['网格 JSON SHA-256',jsonhash]);note.append(['OCR 识别条数',ocr_count]);note.append(['适用限制','仅虚构样例；模型分数只作参考，不证明识别正确；网格、文字和空白格均须对照原图人工复核'])
+        note=w.create_sheet('说明');note.append(['项目','内容']);note.append(['原图文件名',image.name]);note.cell(2,2).data_type='s';note.append(['原图 SHA-256',imagehash]);note.append(['网格 JSON SHA-256',jsonhash]);note.append(['OCR 识别条数',ocr_count]);note.append(['适用限制','仅虚构样例；模型分数只作参考，不证明识别正确；网格、文字和空白格均须对照原图人工复核']);note.append(['OCR 识别状态',ocr_status])
         if sha(image)!=imagehash or sha(table_json)!=jsonhash:raise ValueError('源文件在处理期间变化')
         fd,temporary=tempfile.mkstemp(prefix='.ledger-grid-review-',suffix='.tmp.xlsx',dir=output.parent)
         try:
@@ -97,6 +100,7 @@ def run(image,table_json,output):
                 actual_other=list(check['未归属片段'].values)[1:]
                 wanted_other=[(v['OCR结果序号'],v['识别文本'] or None,float(v['模型分数']),_pixel_box_json(v['位置_像素']),'待人工核对原图') for v in unassigned]
                 if actual_other!=wanted_other:raise ValueError('未归属片段回读不一致')
+                if check['说明']['B7'].value!=ocr_status:raise ValueError('OCR 识别状态回读不一致')
             finally:check.close()
             if sha(image)!=imagehash or sha(table_json)!=jsonhash:raise ValueError('源文件在处理期间变化')
             os.link(temporary,output)
