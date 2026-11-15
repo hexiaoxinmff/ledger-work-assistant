@@ -77,5 +77,28 @@ class DocxResourceLimits(unittest.TestCase):
                 module.extract(path)
 
 
+    def test_run_rejects_oversized_file_before_hashing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source = directory / "oversized.docx"
+            output = directory / "review.xlsx"
+            source.write_bytes(b"more than one byte")
+            with patch.object(module, "MAX_DOCX_BYTES", 1):
+                with patch.object(module, "sha") as digest:
+                    with self.assertRaisesRegex(ValueError, "100 MiB"):
+                        module.run(source, output)
+                    digest.assert_not_called()
+            self.assertFalse(output.exists())
+            self.assertEqual(list(directory.glob(".ledger-docx-*")), [])
+
+    def test_sha_rejects_growth_after_initial_size_check(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "changed.docx"
+            source.write_bytes(b"two bytes")
+            with patch.object(module.os.path, "getsize", return_value=1):
+                with self.assertRaisesRegex(ValueError, "读取期间超过"):
+                    module.sha(source, max_bytes=1)
+
+
 if __name__ == "__main__":
     unittest.main()
