@@ -37,8 +37,11 @@ class PdfReview(unittest.TestCase):
    self.assertEqual(render.run(pdf,pages),2)
    for i in (1,2):
     image=pages/f'page_{i:04d}.png';ocr=pages/f'page_{i:04d}_ocr.json';grid=pages/f'page_{i:04d}_grid.json'
-    ocr.write_text(json.dumps({'来源sha256':sha(image),'结果':[]}),encoding='utf8')
-    data={'来源sha256':sha(image),'OCR结果sha256':sha(ocr),'行数':1,'列数':1,'单元格':[{'行':1,'列':1,'识别文本':f'00{i}','边界_像素':[0,0,10,10]}],'未归属片段':[]}
+    text=f'00{i}'
+    box=[[1,1],[10,1],[10,10],[1,10]]
+    fragment={'OCR结果序号':1,'识别文本':text,'位置_像素':box,'模型分数':0.99,'复核状态':'待人工核对原图'}
+    ocr.write_text(json.dumps({'来源sha256':sha(image),'识别状态':'已检出 1 条 OCR 候选','识别条数':1,'结果':[{'识别文本':text,'位置_像素':box,'模型分数':0.99}]}),encoding='utf8')
+    data={'来源sha256':sha(image),'OCR结果sha256':sha(ocr),'OCR识别条数':1,'OCR识别状态':'已检出 1 条 OCR 候选','行数':1,'列数':1,'单元格':[{'行':1,'列':1,'识别文本':text,'边界_像素':[0,0,10,10],'片段':[fragment]}],'未归属片段':[]}
     grid.write_text(json.dumps(data,ensure_ascii=False),encoding='utf8')
    def broken_save(workbook,stream):
     stream.write(b'partial');raise OSError('simulated write failure')
