@@ -134,10 +134,15 @@ def run(source, output):
         if not len(texts) == len(boxes) == len(scores):
             raise ValueError("识别字段数量不一致")
         for text, box, score in zip(texts, boxes, scores):
+            if not isinstance(text, str):
+                raise ValueError("OCR 识别文本格式无效")
+            score_value = _finite_float(score, "OCR 模型分数必须为 0 至 1 的有限数")
+            if not 0 <= score_value <= 1:
+                raise ValueError("OCR 模型分数必须为 0 至 1 的有限数")
             records.append({
-                "识别文本": str(text),
-                "位置_像素": [[round(float(x), 2), round(float(y), 2)] for x, y in box],
-                "模型分数": round(float(score), 4),
+                "识别文本": text,
+                "位置_像素": _validated_box(box),
+                "模型分数": round(score_value, 4),
                 "复核状态": "待人工核对原图",
             })
     if sha(source) != before:
@@ -157,7 +162,7 @@ def run(source, output):
     )
     try:
         with os.fdopen(fd, "w", encoding="utf8") as stream:
-            json.dump(data, stream, ensure_ascii=False, indent=2)
+            json.dump(data, stream, ensure_ascii=False, indent=2, allow_nan=False)
             stream.flush()
             os.fsync(stream.fileno())
         with open(temporary, encoding="utf8") as stream:
