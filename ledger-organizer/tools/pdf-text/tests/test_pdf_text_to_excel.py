@@ -69,10 +69,10 @@ class PdfTextToExcel(unittest.TestCase):
         self.assertEqual(list(module.NUMBER.finditer(malformed)), [])
 
     def test_chinese_amount_candidates_preserve_text_and_skip_ordinals(self):
-        text = "金额人民币叁佰伍拾元整，欠款三百五十元，金额负壹仟贰佰元整，余额三万零五百，金额人民币1,234.56元整，欠款负100元；第十二项，第一百项，编号〇〇〇二号"
+        text = "金额人民币叁佰伍拾元整，欠款三百五十元，金额负壹仟贰佰元整，余额三万零五百，金额人民币1,234.56元整，欠款负100元；廿七，卅元，卌；第十二项，第一百项，编号〇〇〇二号"
         self.assertEqual(
             [match.group(0) for match in module.NUMBER.finditer(text)],
-            ["人民币叁佰伍拾元整", "三百五十元", "负壹仟贰佰元整", "三万零五百", "人民币1,234.56元整", "负100元"],
+            ["人民币叁佰伍拾元整", "三百五十元", "负壹仟贰佰元整", "三万零五百", "人民币1,234.56元整", "负100元", "廿七", "卅元", "卌"],
         )
 
     def test_pdfium_extracts_real_chinese_cid_font_amount_text(self):
