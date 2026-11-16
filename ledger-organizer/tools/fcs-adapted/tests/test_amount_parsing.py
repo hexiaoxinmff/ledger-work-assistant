@@ -21,7 +21,7 @@ class AmountParsing(unittest.TestCase):
             ("0", Decimal("0.00")),
             ("1.230", Decimal("1.23")),
             ("1e3", Decimal("1000.00")),
-            ("-4.5e-2", Decimal("-0.05")),
+            ("-4.5e-1", Decimal("-0.45")),
         ]
         for raw, expected in cases:
             with self.subTest(raw=raw):
@@ -33,7 +33,7 @@ class AmountParsing(unittest.TestCase):
                 self.assertEqual(parse_amount(raw, 2), (None, "非法金额"))
 
     def test_nonzero_precision_beyond_config_is_pending(self):
-        for raw in ("1.234", "1.235", "-0.001"):
+        for raw in ("1.234", "1.235", "-0.001", "-4.5e-2"):
             with self.subTest(raw=raw):
                 self.assertEqual(parse_amount(raw, 2), (None, "金额精度超出配置"))
         self.assertEqual(parse_amount("1.234", 3), (Decimal("1.234"), None))
