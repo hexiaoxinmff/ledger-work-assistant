@@ -4,7 +4,7 @@
 
 ## 安装和使用
 
-当前技能版本：v0.88。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
+当前技能版本：v0.91。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
 
 本机虚构回归入口：`python ledger-organizer/tools/run_checks.py`。默认执行基础环境/样例/转换/Word 提取测试；对账业务规则测试用 `--suite ledger`（需预装 pandas、openpyxl、PyYAML），PDF 文字层转表测试用 `--suite pdf-text`（需预装 pypdfium2、openpyxl），OCR 相关测试用 `--suite ocr`，全部用 `--suite all`。各组依赖须事先满足，报告保留失败、超时和未运行项目，不能将部分通过当成全功能通过。这些测试不包含真实账目、平台自主调用、界面或 OCR 准确率验收。
 
@@ -93,3 +93,6 @@ PDF 中文金额测试现包含使用 PyMuPDF 生成的简体中文 CID 字体�
 
 
 XLSX→CSV 对超过 15 位有效数字的底层数值会停止转换，避免把可能已受 Excel 精度影响的长数字当作可信原值；核对原件并按文本保存已确认值后再转换。
+
+
+当前版本 v0.91 已包含 DOCX/PDF “廿、卅、卌”原文候选复核，以及 XLSX 长数值保守拦截；这些功能只保留原文并要求人工核对，不自动恢复或确认数字含义。
