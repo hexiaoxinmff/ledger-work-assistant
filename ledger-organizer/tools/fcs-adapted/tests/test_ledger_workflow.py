@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from openpyxl import load_workbook
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
@@ -98,5 +99,30 @@ class LedgerWorkflow(unittest.TestCase):
                 self.assertEqual(overview[5][1], '-' + expected_side_total)
             finally:
                 workbook.close()
+
+
+    def test_failed_publish_removes_only_our_reservations(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            left, right, output = directory/'left.csv', directory/'right.csv', directory/'result.xlsx'
+            rows = [['B301', '10.00', '2026-11-01', 'ok']]
+            for path in (left, right):
+                with path.open('w', encoding='utf-8', newline='') as stream:
+                    csv.writer(stream).writerows([['ID', 'amount', 'date', 'note'], *rows])
+            fields = config.FieldMap('ID', 'amount', 'date', None, None)
+            settings = config.ReconcileConfig(
+                config.TableSpec(str(left), None, 0, fields),
+                config.TableSpec(str(right), None, 0, fields),
+                config.MatchConfig(direction_rule='none'),
+                str(output), 'synthetic', 'synthetic'
+            )
+            with mock.patch.object(
+                reconcile.reporter, 'write_workbook',
+                side_effect=RuntimeError('synthetic write failure')
+            ):
+                with self.assertRaisesRegex(RuntimeError, 'synthetic write failure'):
+                    reconcile.run(settings, run_id='publish-failure', run_at='')
+            self.assertFalse(output.exists())
+            self.assertFalse(Path(str(output) + '.manifest.json').exists())
 
 if __name__=='__main__':unittest.main()
