@@ -201,8 +201,12 @@ def _xlsx_cell_text(cell, allow_display_loss):
             significant=len(Decimal(str(cell.value)).normalize().as_tuple().digits)
         except (InvalidOperation,ValueError):
             significant=0
-        if significant>15:
-            raise ValueError(f'{cell.coordinate} 的数值超过 15 位有效数字，Excel 数值可能已丢失精度；请对照原始资料，将已核实的编号/数值按文本保存后再转换')
+        try:
+            magnitude=abs(Decimal(str(cell.value)))
+        except (InvalidOperation,ValueError):
+            magnitude=Decimal(0)
+        if significant>15 or magnitude>=Decimal('1e15'):
+            raise ValueError(f'{cell.coordinate} 的数值有效位数或数量级可能超出 Excel 精度范围；请对照原始资料，将已核实的编号/数值按文本保存后再转换')
     if (cell.data_type=='d' or (cell.data_type=='n' and cell.value is not None and cell.number_format.lower()!='general')) and not allow_display_loss:
         raise ValueError(f'{cell.coordinate} 的数字或日期显示依赖格式；CSV 无法保存显示格式。请核对原表，如接受导出底层值可指定 --allow-display-loss')
     value='' if cell.value is None else str(cell.value)
