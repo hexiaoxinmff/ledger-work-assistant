@@ -99,7 +99,7 @@ class PdfTextToExcel(unittest.TestCase):
 
             result = module.run(source, output)
             self.assertEqual(result["pages"], 1)
-            self.assertEqual(result["number_candidates"], 2)
+            self.assertEqual(result["number_candidates"], 5)
             self.assertEqual(result["source_sha256"], before)
             self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(), before)
 
@@ -111,7 +111,7 @@ class PdfTextToExcel(unittest.TestCase):
                     self.assertIn(line, extracted)
                 candidates = list(workbook["数字候选"].values)[1:]
                 by_text = {row[2]: row for row in candidates}
-                expected = ["人民币叁佰伍拾元整", "人民币1,234.56元整"]
+                expected = ["人民币叁佰伍拾元整", "人民币1,234.56元整", "廿七", "卅元", "卌"]
                 self.assertEqual(set(by_text), set(expected))
                 for phrase in expected:
                     self.assertEqual(by_text[phrase][1], extracted.index(phrase))
@@ -121,7 +121,7 @@ class PdfTextToExcel(unittest.TestCase):
                 workbook.close()
 
     def test_chinese_amount_candidates_survive_pdf_export_with_offsets_and_review_state(self):
-        text = "金额人民币叁佰伍拾元整，欠款人民币1,234.56元整；第十二项"
+        text = "金额人民币叁佰伍拾元整，欠款人民币1,234.56元整，补记廿七、卅元、卌；第十二项"
 
         class Searcher:
             def __init__(self, match):
