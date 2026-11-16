@@ -59,22 +59,17 @@ def run(config_obj: config_mod.ReconcileConfig, *, run_id: str, run_at: str) -> 
     s = summary_mod.build_summary(outcomes, len(left_rows), len(right_rows))
     errors = 0 if (s["quantity_reconciled"] and s["amount_reconciled"]) else 1
 
-    # Exclusive creation reserves both names atomically on supported local filesystems.
-    output_stream = open(config_obj.output_path, 'xb')
+    # Reserve both names atomically; publish only after all read-back checks succeed.
+    output_stream = None
+    manifest_stream = None
+    output_reserved = False
+    manifest_reserved = False
+    published = False
     try:
-        try:
-            manifest_stream = open(config_obj.output_path + '.manifest.json', 'xb')
-        except BaseException:
-            # Only remove our own still-empty reservation; never remove another file.
-            own_stat = os.fstat(output_stream.fileno())
-            output_stream.close()
-            try:
-                current = os.stat(config_obj.output_path, follow_symlinks=False)
-                if own_stat.st_size == 0 and current.st_size == 0 and os.path.samestat(own_stat, current):
-                    os.unlink(config_obj.output_path)
-            except FileNotFoundError:
-                pass
-            raise
+        output_stream = open(config_obj.output_path, 'xb')
+        output_reserved = True
+        manifest_stream = open(config_obj.output_path + '.manifest.json', 'xb')
+        manifest_reserved = True
         with manifest_stream:
             reporter.write_workbook(items, s, {
                 "rule_version": config_obj.rule_version,
@@ -110,8 +105,24 @@ def run(config_obj: config_mod.ReconcileConfig, *, run_id: str, run_at: str) -> 
                 counts=cast(dict[str, Any], s["counts"]), warnings=0, errors=errors)
             manifest_stream.write(json.dumps(m, ensure_ascii=False, indent=2).encode("utf-8"))
             manifest_stream.flush()
+        published = True
     finally:
-        output_stream.close()
+        if manifest_stream is not None and not manifest_stream.closed:
+            manifest_stream.close()
+        if output_stream is not None and not output_stream.closed:
+            output_stream.close()
+        if not published:
+            # Remove only files reserved by this invocation; never touch pre-existing paths.
+            if manifest_reserved:
+                try:
+                    os.unlink(config_obj.output_path + '.manifest.json')
+                except FileNotFoundError:
+                    pass
+            if output_reserved:
+                try:
+                    os.unlink(config_obj.output_path)
+                except FileNotFoundError:
+                    pass
     return s
 
 
