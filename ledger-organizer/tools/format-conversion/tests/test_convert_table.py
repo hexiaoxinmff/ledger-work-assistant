@@ -37,6 +37,21 @@ class ConvertTable(unittest.TestCase):
     if suffix=='.tsv':
      with self.assertRaisesRegex(ValueError,'TSV 必须'):module.run(str(source),str(directory/'bad.xlsx'),delimiter=';')
      self.assertFalse((directory/'bad.xlsx').exists())
+ def test_numeric_values_over_15_significant_digits_are_rejected(self):
+  for value in (1234567890123456,123456789012345.6):
+   with self.subTest(value=value),tempfile.TemporaryDirectory() as tmp:
+    d=Path(tmp);src=d/'source.xlsx';out=d/'result.csv'
+    w=Workbook();w.active['A1']=value;w.save(src);w.close()
+    with self.assertRaisesRegex(ValueError,'超过 15 位有效数字'):
+     module.run(str(src),str(out),allow_display_loss=True)
+    self.assertFalse(out.exists())
+    self.assertEqual(list(d.glob('.ledger-conversion-*')),[])
+  with tempfile.TemporaryDirectory() as tmp:
+   d=Path(tmp);src=d/'source.xlsx';out=d/'result.csv'
+   w=Workbook();w.active['A1']=123456789012345;w.save(src);w.close()
+   self.assertEqual(module.run(str(src),str(out)),1)
+   with out.open(encoding='utf-8-sig',newline='') as f:self.assertEqual(list(csv.reader(f)),[['123456789012345']])
+
  def test_formatted_numbers_require_explicit_choice(self):
   cases=[(123,'00000'),(0.15,'0%'),(12.3,'0.00'),(datetime.datetime(2026,1,2),'yyyy-mm-dd')]
   for value,fmt in cases:
