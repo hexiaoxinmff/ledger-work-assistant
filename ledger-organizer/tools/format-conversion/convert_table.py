@@ -1,5 +1,6 @@
 """Local CSV/XLSX value conversion, with explicit limits and verification."""
 import argparse, csv, hashlib, itertools, json, os, posixpath, re, tempfile, unicodedata, zipfile
+from decimal import Decimal, InvalidOperation
 from xml.etree import ElementTree as ET
 from openpyxl import Workbook, load_workbook
 from openpyxl.cell import WriteOnlyCell
@@ -195,6 +196,13 @@ def _xlsx_cell_text(cell, allow_display_loss):
         raise ValueError('存在公式或错误值，不能安全转为 CSV')
     if isinstance(cell.value,str) and len(cell.value)>32767:
         raise ValueError(f'{cell.coordinate} 的文本超过 Excel 单元格容量')
+    if isinstance(cell.value,(int,float)) and not isinstance(cell.value,bool):
+        try:
+            significant=len(Decimal(str(cell.value)).normalize().as_tuple().digits)
+        except (InvalidOperation,ValueError):
+            significant=0
+        if significant>15:
+            raise ValueError(f'{cell.coordinate} 的数值超过 15 位有效数字，Excel 数值可能已丢失精度；请对照原始资料，将已核实的编号/数值按文本保存后再转换')
     if (cell.data_type=='d' or (cell.data_type=='n' and cell.value is not None and cell.number_format.lower()!='general')) and not allow_display_loss:
         raise ValueError(f'{cell.coordinate} 的数字或日期显示依赖格式；CSV 无法保存显示格式。请核对原表，如接受导出底层值可指定 --allow-display-loss')
     value='' if cell.value is None else str(cell.value)
