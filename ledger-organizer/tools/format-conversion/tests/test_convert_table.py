@@ -1,5 +1,5 @@
 """Synthetic tests: distinguish cell values from Excel's displayed formatting."""
-import csv, datetime, importlib.util, os, re, subprocess, sys, tempfile, time, unittest, zipfile
+import csv, datetime, importlib.util, json, os, re, subprocess, sys, tempfile, time, unittest, zipfile
 from pathlib import Path
 from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
@@ -30,10 +30,17 @@ class ConvertTable(unittest.TestCase):
     with source.open('w',encoding='utf-8-sig',newline='') as stream:csv.writer(stream,delimiter=separator).writerows(rows)
     before=module.sha(source)
     module.run(str(source),str(xlsx),delimiter=option)
+    manifest_path=Path(str(xlsx)+'.manifest.json')
+    manifest=json.loads(manifest_path.read_text(encoding='utf-8'))
+    self.assertEqual(manifest['source_sha256'],before)
+    self.assertEqual(manifest['output_sha256'],module.sha(xlsx))
+    self.assertEqual(manifest['rows'],3)
+    self.assertEqual(manifest['columns'],3)
     module.run(str(xlsx),str(restored),delimiter=option)
     with restored.open(encoding='utf-8-sig',newline='') as stream:self.assertEqual(list(csv.reader(stream,delimiter=separator)),rows)
     self.assertEqual(module.sha(source),before)
     with self.assertRaises(FileExistsError):module.run(str(source),str(xlsx),delimiter=option)
+    self.assertEqual(json.loads(manifest_path.read_text(encoding='utf-8')),manifest)
     if suffix=='.tsv':
      with self.assertRaisesRegex(ValueError,'TSV 必须'):module.run(str(source),str(directory/'bad.xlsx'),delimiter=';')
      self.assertFalse((directory/'bad.xlsx').exists())
@@ -143,7 +150,7 @@ class ConvertTable(unittest.TestCase):
   with tempfile.TemporaryDirectory() as tmp:
    directory=Path(tmp);source=directory/'input.csv';output=directory/'output.xlsx';start=directory/'start'
    with source.open('w',encoding='utf-8-sig',newline='') as stream:csv.writer(stream).writerows([['编号'],['00042']])
-   child='''import importlib.util,sys,time\nfrom pathlib import Path\ns=importlib.util.spec_from_file_location("convert_child",sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nreal=m.os.link\ndef barrier(src,dst):\n Path(sys.argv[4]).touch(exist_ok=False)\n deadline=time.monotonic()+20\n while not Path(sys.argv[5]).exists():\n  if time.monotonic()>deadline: raise TimeoutError("barrier timeout")\n  time.sleep(.01)\n return real(src,dst)\nm.os.link=barrier\ntry: m.run(sys.argv[2],sys.argv[3])\nexcept FileExistsError: sys.exit(17)\n'''
+   child='''import importlib.util,sys,time\nfrom pathlib import Path\ns=importlib.util.spec_from_file_location("convert_child",sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nreal=m.os.link\ncalls=[0]\ndef barrier(src,dst):\n calls[0]+=1\n if calls[0]==1:\n  Path(sys.argv[4]).touch(exist_ok=False)\n  deadline=time.monotonic()+20\n  while not Path(sys.argv[5]).exists():\n   if time.monotonic()>deadline: raise TimeoutError(\"barrier timeout\")\n   time.sleep(.01)\n return real(src,dst)\nm.os.link=barrier\ntry: m.run(sys.argv[2],sys.argv[3])\nexcept FileExistsError: sys.exit(17)\n'''
    processes=[]
    try:
     for index in range(2):
@@ -160,6 +167,21 @@ class ConvertTable(unittest.TestCase):
    workbook=load_workbook(output,read_only=True)
    try:self.assertEqual(list(workbook.active.values),[('编号',),('00042',)])
    finally:workbook.close()
+   self.assertEqual(list(directory.glob('.ledger-conversion-*.tmp')),[])
+
+ def test_manifest_publish_failure_removes_output(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   directory=Path(tmp);source=directory/'input.csv';output=directory/'output.xlsx'
+   source.write_text('id\\n00042\\n',encoding='utf-8')
+   real_link=module.os.link;calls=[]
+   def fail_on_manifest(src,dst):
+    calls.append(dst)
+    if len(calls)==2:raise OSError('manifest link failure')
+    return real_link(src,dst)
+   with patch.object(module.os,'link',side_effect=fail_on_manifest):
+    with self.assertRaisesRegex(OSError,'manifest link failure'):module.run(str(source),str(output))
+   self.assertFalse(output.exists())
+   self.assertFalse(Path(str(output)+'.manifest.json').exists())
    self.assertEqual(list(directory.glob('.ledger-conversion-*.tmp')),[])
 
  def test_csv_to_xlsx_streaming_limits_reject_before_publication(self):
