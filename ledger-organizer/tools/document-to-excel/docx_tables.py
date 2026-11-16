@@ -20,6 +20,8 @@ def contains_number(text):
         return True
     if any(char in CHINESE_FINANCIAL_DIGITS for char in text):
         return True
+    if any(char in "廿卅卌" for char in text):
+        return True
     return (any(char in CHINESE_NUMBER_DIGITS for char in text)
             and any(char in CHINESE_NUMBER_UNITS for char in text))
 
