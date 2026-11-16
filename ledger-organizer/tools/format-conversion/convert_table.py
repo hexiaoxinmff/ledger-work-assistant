@@ -299,6 +299,11 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
     # Stage beside the destination, verify, then publish without overwriting.
     # The temporary file may contain the same sensitive values as the source.
     parent=os.path.dirname(os.path.abspath(output))
+    manifest_path = output + '.manifest.json'
+    if os.path.realpath(source) == os.path.realpath(manifest_path):
+        raise ValueError('运行清单不可覆盖输入')
+    if os.path.lexists(output) or os.path.lexists(manifest_path):
+        raise FileExistsError('输出文件或运行清单已存在，请使用新路径')
     fd,tempname=tempfile.mkstemp(prefix='.ledger-conversion-',suffix='.tmp',dir=parent)
     try:
         if dst=='.xlsx':
@@ -358,8 +363,48 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
                 elif list(reader)!=rows:
                     raise ValueError('转换后回读不一致')
         if sha(source,input_limit)!=before:raise ValueError('源文件发生变化，结果不可交付')
-        os.link(tempname,output)
-    finally:os.unlink(tempname)
+        output_reserved = False
+        manifest_reserved = False
+        manifest_temp = None
+        try:
+            os.link(tempname, output)
+            output_reserved = True
+            output_sha = sha(output)
+            row_count = csv_row_count if csv_to_xlsx else xlsx_row_count
+            manifest = {
+                "format_conversion_version": "0.1",
+                "source_path": os.path.abspath(source),
+                "output_path": os.path.abspath(output),
+                "source_sha256": before,
+                "output_sha256": output_sha,
+                "source_format": src,
+                "output_format": dst,
+                "rows": row_count,
+                "columns": csv_column_count if csv_to_xlsx else expected_columns,
+                "encoding": encoding if csv_to_xlsx else None,
+                "delimiter": separator,
+                "sheet": sheet if xlsx_to_csv else None,
+            }
+            mfd, manifest_temp = tempfile.mkstemp(
+                prefix='.ledger-conversion-manifest-', suffix='.tmp', dir=parent
+            )
+            with os.fdopen(mfd, 'w', encoding='utf-8') as stream:
+                json.dump(manifest, stream, ensure_ascii=False, indent=2)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.link(manifest_temp, manifest_path)
+            manifest_reserved = True
+        finally:
+            if manifest_temp and os.path.exists(manifest_temp):
+                os.unlink(manifest_temp)
+            if output_reserved and not manifest_reserved:
+                try:
+                    os.unlink(output)
+                except FileNotFoundError:
+                    pass
+    finally:
+        if os.path.exists(tempname):
+            os.unlink(tempname)
     return csv_row_count if csv_to_xlsx else (xlsx_row_count if xlsx_to_csv else len(rows))
 
 
