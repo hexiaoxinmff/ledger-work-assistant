@@ -18,7 +18,7 @@ def _clean(raw: str | None) -> str | None:
     return s or None
 
 
-_AMOUNT_RE = re.compile(r"^[+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)$")
+_AMOUNT_RE = re.compile(r"^[+-]?(?:(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?|\d+(?:\.\d+)?[eE][+-]?\d+)$")
 _CURRENCY_SYMBOLS = set("￥¥$")
 
 
