@@ -50,6 +50,11 @@ class ChineseNumberCandidates(unittest.TestCase):
                 self.assertEqual([row[3] for row in candidates], values[:-1])
                 self.assertTrue(all(row[4] == "待人工复核" for row in candidates))
                 self.assertTrue(all(cell.data_type != "f" for row in workbook["数字复核"].iter_rows() for cell in row))
+                provenance = dict(list(workbook["来源"].values)[1:])
+                self.assertEqual(provenance["源文件名"], source.name)
+                self.assertEqual(provenance["源文件 SHA-256"], before)
+                self.assertEqual(provenance["提取单元格数"], len(values))
+                self.assertIn("人工逐项核对", provenance["数字复核"])
             finally:
                 workbook.close()
 
