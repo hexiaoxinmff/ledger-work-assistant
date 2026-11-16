@@ -31,7 +31,7 @@ def make_docx(path, values):
 
 class ChineseNumberCandidates(unittest.TestCase):
     def test_standalone_chinese_units_reach_review_sheet_without_rewriting(self):
-        values = ["十元", "拾元", "百元", "佰元", "十", "十二元", "商户A"]
+        values = ["十元", "拾元", "百元", "佰元", "十", "十二元", "廿元", "卅元", "卌元", "商户A"]
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             source, output = directory / "fictional.docx", directory / "review.xlsx"
@@ -59,6 +59,9 @@ class ChineseNumberCandidates(unittest.TestCase):
         self.assertTrue(module.contains_number("拾元"))
         self.assertTrue(module.contains_number("百元"))
         self.assertTrue(module.contains_number("佰元"))
+        self.assertTrue(module.contains_number("廿元"))
+        self.assertTrue(module.contains_number("卅元"))
+        self.assertTrue(module.contains_number("卌元"))
 
 
 if __name__ == "__main__":
