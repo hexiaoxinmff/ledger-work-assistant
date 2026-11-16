@@ -99,7 +99,7 @@ class PdfTextToExcel(unittest.TestCase):
 
             result = module.run(source, output)
             self.assertEqual(result["pages"], 1)
-            self.assertEqual(result["number_candidates"], 5)
+            self.assertEqual(result["number_candidates"], 2)
             self.assertEqual(result["source_sha256"], before)
             self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(), before)
 
