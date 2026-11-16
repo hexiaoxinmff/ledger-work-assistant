@@ -125,4 +125,38 @@ class LedgerWorkflow(unittest.TestCase):
             self.assertFalse(output.exists())
             self.assertFalse(Path(str(output) + '.manifest.json').exists())
 
+
+    def test_bar_visualization_preserves_sources_and_manifest_choice(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            left, right, output = directory/'left.csv', directory/'right.csv', directory/'result.xlsx'
+            left_rows = [['B401', '10.00', '2026-11-01', 'left']]
+            right_rows = [['B401', '9.00', '2026-11-01', 'right']]
+            for path, rows in ((left, left_rows), (right, right_rows)):
+                with path.open('w', encoding='utf-8-sig', newline='') as stream:
+                    csv.writer(stream).writerows([['ID', 'amount', 'date', 'note'], *rows])
+            fields = config.FieldMap('ID', 'amount', 'date', None, None)
+            settings = config.ReconcileConfig(
+                config.TableSpec(str(left), None, 0, fields),
+                config.TableSpec(str(right), None, 0, fields),
+                config.MatchConfig(direction_rule='none'),
+                str(output), 'synthetic', 'synthetic', visualization='bar'
+            )
+            summary = reconcile.run(settings, run_id='visualization', run_at='')
+            self.assertEqual(summary['counts']['金额差异'], 1)
+            workbook = load_workbook(output, read_only=False, data_only=False)
+            try:
+                self.assertIn('结果图表', workbook.sheetnames)
+                chart_sheet = workbook['结果图表']
+                self.assertEqual(chart_sheet['A1'].value, '对账结果项分布（单位：结果项）')
+                self.assertEqual(chart_sheet['A4'].value, '已自动匹配')
+                self.assertEqual(chart_sheet['B4'].value, 0)
+                self.assertEqual(len(chart_sheet._charts), 1)
+                self.assertEqual(len(list(workbook['左侧读取明细'].values)), 2)
+                self.assertEqual(len(list(workbook['右侧读取明细'].values)), 2)
+            finally:
+                workbook.close()
+            manifest = json.loads(Path(str(output) + '.manifest.json').read_text(encoding='utf-8'))
+            self.assertEqual(manifest['config']['visualization'], 'bar')
+
 if __name__=='__main__':unittest.main()
