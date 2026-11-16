@@ -18,7 +18,7 @@ MAX_PDF_BYTES = 100 * 1024 * 1024
 MAX_PAGES = 200
 MAX_TOTAL_CHARS = 500_000
 TEXT_CHUNK = 30_000
-CJK_NUMERAL_CHARS = "零〇一二两三四五六七八九壹贰叁肆伍陆柒捌玖十拾百佰千仟万萬亿億兆"
+CJK_NUMERAL_CHARS = "零〇一二两三四五六七八九壹贰叁肆伍陆柒捌玖十拾百佰千仟万萬亿億兆廿卅卌"
 CJK_AMOUNT_UNITS = "百佰千仟万萬亿億兆元圆圓块角毛分整"
 NUMBER = re.compile(
     r"(?<![\w.,，．])(?:\(\s*(?:\d{1,3}(?:,\d{3})+|\d{1,3}(?:，\d{3})+|\d+)(?:[.．]\d+)?\s*\)|"
