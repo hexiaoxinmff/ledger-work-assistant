@@ -33,3 +33,5 @@ jobs:
         run: python -m pip install pandas==3.0.1 openpyxl==3.1.5 PyYAML==6.0.3
       - name: Run synthetic ledger regression suite
         run: python -m unittest discover -s ledger-organizer/tools/fcs-adapted/tests -v
+      - name: Run skill discovery safety regression
+        run: python -m unittest discover -s ledger-organizer/tools/skill-discovery/tests -v
