@@ -60,12 +60,12 @@ class PdfTextToExcel(unittest.TestCase):
         )
 
     def test_number_candidates_require_complete_token_boundaries(self):
-        valid = "ID 001234567890123456789 Amount 1,234.56 Balance (88.00) Credit (1,234.56) Fullwidth １，２３４．５６ Rate １２．５％ signed −45.60"
+        valid = "ID 001234567890123456789 Amount 1,234.56 Balance (88.00) Credit (1,234.56) Scientific 1.23E+05 negative -4.5e-2 Fullwidth １，２３４．５６ Rate １２．５％ signed −45.60"
         self.assertEqual(
             [match.group(0) for match in module.NUMBER.finditer(valid)],
-            ["001234567890123456789", "1,234.56", "(88.00)", "(1,234.56)", "１，２３４．５６", "１２．５％", "−45.60"],
+            ["001234567890123456789", "1,234.56", "(88.00)", "(1,234.56)", "1.23E+05", "-4.5e-2", "１，２３４．５６", "１２．５％", "−45.60"],
         )
-        malformed = "Code 123ABC Version 1.2.3 Group 1,23 Group 1234,567 BadCredit (12,34) BadLongCredit (1234,567) Underscore 12_34 FullwidthBad １，２３"
+        malformed = "Code 123ABC Version 1.2.3 ScientificBad 1.2E Group 1,23 Group 1234,567 BadCredit (12,34) BadLongCredit (1234,567) Underscore 12_34 FullwidthBad １，２３"
         self.assertEqual(list(module.NUMBER.finditer(malformed)), [])
 
     def test_chinese_amount_candidates_preserve_text_and_skip_ordinals(self):
