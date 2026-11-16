@@ -19,7 +19,9 @@ class AmountParsing(unittest.TestCase):
             (".5", Decimal("0.50")),
             ("-1,234.00", Decimal("-1234.00")),
             ("0", Decimal("0.00")),
-            ("1.230", Decimal("1.23")),\n            ("1e3", Decimal("1000.00")),\n            ("-4.5e-2", Decimal("-0.05")),
+            ("1.230", Decimal("1.23")),
+            ("1e3", Decimal("1000.00")),
+            ("-4.5e-2", Decimal("-0.05")),
         ]
         for raw, expected in cases:
             with self.subTest(raw=raw):
