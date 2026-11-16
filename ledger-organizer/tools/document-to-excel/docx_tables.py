@@ -153,6 +153,13 @@ def run(source, output):
                 if contains_number(value):
                     audit.append([ti, ri, ci, value, "待人工复核"])
                     audit.cell(audit.max_row, 4).data_type = "s"
+            provenance = wb.create_sheet("来源")
+            provenance.append(["项目", "内容"])
+            provenance.append(["源文件名", os.path.basename(source)])
+            provenance.append(["源文件 SHA-256", before])
+            provenance.append(["提取单元格数", len(rows)])
+            provenance.append(["数字复核", "候选仅供人工逐项核对；不自动换算或确认金额"])
+            provenance.append(["工具边界", "仅支持可提取文本的简单 DOCX 表格，不处理扫描件、合并单元格或复杂 Word 结构"])
             wb.save(temporary)
         finally:
             wb.close()
@@ -176,6 +183,15 @@ def run(source, output):
             ]
             if audit_actual != audit_expected:
                 raise ValueError("数字复核清单回读不一致")
+            provenance_expected = [
+                ("源文件名", os.path.basename(source)),
+                ("源文件 SHA-256", before),
+                ("提取单元格数", len(rows)),
+                ("数字复核", "候选仅供人工逐项核对；不自动换算或确认金额"),
+                ("工具边界", "仅支持可提取文本的简单 DOCX 表格，不处理扫描件、合并单元格或复杂 Word 结构"),
+            ]
+            if list(check["来源"].values)[1:] != provenance_expected:
+                raise ValueError("来源信息回读不一致")
         finally:
             check.close()
         # Hard-link publication is atomic and refuses to overwrite an existing path.
