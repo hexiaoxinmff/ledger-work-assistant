@@ -12,7 +12,7 @@ MAX_DOCX_DOCUMENT_XML_BYTES = 64 * 1024 * 1024
 MAX_DOCX_ENTRIES = 10_000
 MAX_DOCX_CELLS = 1_000_000
 CHINESE_FINANCIAL_DIGITS = set("壹贰貳叁參肆伍陆陸柒捌玖零〇")
-CHINESE_NUMBER_DIGITS = set("零〇一二两兩三四五六七八九十拾百佰千仟万萬亿億兆")
+CHINESE_NUMBER_DIGITS = set("零〇一二两兩三四五六七八九十拾百佰千仟万萬亿億兆廿卅卌")
 CHINESE_NUMBER_UNITS = set("十拾百佰千仟万萬亿億元圆圓角分厘")
 
 def contains_number(text):
