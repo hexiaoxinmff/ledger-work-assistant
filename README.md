@@ -4,7 +4,7 @@
 
 ## 安装和使用
 
-当前技能版本：v0.93。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
+当前技能版本：v0.94。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
 
 本机虚构回归入口：`python ledger-organizer/tools/run_checks.py`。默认执行基础环境/样例/转换/Word 提取测试；对账业务规则测试用 `--suite ledger`（需预装 pandas、openpyxl、PyYAML），PDF 文字层转表测试用 `--suite pdf-text`（需预装 pypdfium2、openpyxl），OCR 相关测试用 `--suite ocr`，全部用 `--suite all`。各组依赖须事先满足，报告保留失败、超时和未运行项目，不能将部分通过当成全功能通过。这些测试不包含真实账目、平台自主调用、界面或 OCR 准确率验收。
 
@@ -104,3 +104,8 @@ PDF 文字层候选会保留规范科学计数法原文供人工复核，不自�
 ### v0.93 发布失败保护
 
 对账脚本只有在工作簿、来源回读、输入哈希和运行清单全部完成后才保留结果；中途失败会清理本次独占预留的半成品，不删除已有文件。该行为已由虚构回归验证。
+
+
+### v0.94 科学计数法传递
+
+XLSX→CSV 可保留完整负科学计数法文本（如 `-4.5e-2`），格式不完整或疑似公式的内容仍会被拦截；不做数值换算。
