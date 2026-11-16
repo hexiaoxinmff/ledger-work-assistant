@@ -38,11 +38,11 @@ class ConvertTable(unittest.TestCase):
      with self.assertRaisesRegex(ValueError,'TSV 必须'):module.run(str(source),str(directory/'bad.xlsx'),delimiter=';')
      self.assertFalse((directory/'bad.xlsx').exists())
  def test_numeric_values_over_15_significant_digits_are_rejected(self):
-  for value in (1234567890123456,123456789012345.6):
+  for value in (1234567890123456,1234567890123460,123456789012345.6):
    with self.subTest(value=value),tempfile.TemporaryDirectory() as tmp:
     d=Path(tmp);src=d/'source.xlsx';out=d/'result.csv'
     w=Workbook();w.active['A1']=value;w.save(src);w.close()
-    with self.assertRaisesRegex(ValueError,'超过 15 位有效数字'):
+    with self.assertRaisesRegex(ValueError,'有效位数或数量级'):
      module.run(str(src),str(out),allow_display_loss=True)
     self.assertFalse(out.exists())
     self.assertEqual(list(d.glob('.ledger-conversion-*')),[])
