@@ -45,15 +45,18 @@ def check_runtime():
         raise ValueError("未发现 rapidocr")
     model_dir = Path(spec.origin).parent / "models"
     model_paths = {}
+    model_hashes = {}
     for filename, expected in EXPECTED_MODELS.items():
         model = (model_dir / filename).resolve()
         if not model.is_file() or sha(model) != expected:
             raise ValueError("本地模型缺失或哈希不符：" + filename)
         model_paths[filename] = str(model)
+        model_hashes[filename] = expected
     return {
         "versions": {"rapidocr": "3.10.0", "onnxruntime": "1.20.1"},
         "models_verified": list(EXPECTED_MODELS),
         "model_paths": model_paths,
+        "model_hashes": model_hashes,
         "note": "已校验版本与模型文件哈希并返回显式路径；尚未初始化引擎或验证识别效果",
     }
 
@@ -191,6 +194,7 @@ def run(source, output):
         "来源文件名": source.name,
         "来源sha256": before,
         "识别引擎": "RapidOCR 3.10.0 / ONNX Runtime 1.20.1",
+        "模型文件哈希": runtime["model_hashes"],
         "识别状态": (
             "已检出候选，全部待人工复核"
             if records else "未检出文字候选；不能据此判断原图空白，需人工查看"
