@@ -96,6 +96,7 @@ def _csv_to_write_only_workbook(source, encoding, separator, expected_columns):
                     raise ValueError("内容超过 Excel 容量")
                 row_count += 1
                 cell_count += column_count
+                numeric_count += sum(_numeric_candidate(value) for value in row)
                 if row_count > 1048576 or cell_count > MAX_CSV_CELLS:
                     raise ValueError("CSV 行数或单元格数超过安全处理上限")
                 cells = []
