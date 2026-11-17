@@ -246,6 +246,10 @@ class PdfTextToExcel(unittest.TestCase):
             self.assertEqual(result["pages_with_text"], 1)
             self.assertEqual(result["source_sha256"], before)
             self.assertTrue(output.is_file())
+            manifest = json.loads(Path(str(output) + ".manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["source_sha256"], before)
+            self.assertEqual(manifest["output_sha256"], module.output_sha256(output))
+            self.assertEqual(manifest["number_candidates"], 6)
             self.assertEqual(list(directory.glob(".ledger-pdf-text-*")), [])
 
             workbook = load_workbook(output, read_only=True, data_only=False)
