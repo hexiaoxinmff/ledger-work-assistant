@@ -11,7 +11,7 @@ for stream in (sys.stdout,sys.stderr):
         stream.reconfigure(encoding='utf-8',errors='replace')
 
 ROOT=Path(__file__).resolve().parents[1]
-CORE=('tools/tests','tools/format-conversion/tests','tools/document-to-excel/tests')
+CORE=('tools/tests','tools/format-conversion/tests','tools/document-to-excel/tests','tools/usage/tests')
 LEDGER=('tools/fcs-adapted/tests',)
 OCR=('tools/local-ocr/tests',)
 PDF_TEXT=('tools/pdf-text/tests',)
