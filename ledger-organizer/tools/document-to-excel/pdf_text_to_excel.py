@@ -3,6 +3,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import importlib.metadata
+import json
 import math
 import os
 from pathlib import Path
@@ -48,6 +49,14 @@ def sha256(path, max_bytes=MAX_PDF_BYTES):
             total += len(block)
             if total > max_bytes:
                 raise ValueError("PDF 文件在读取期间超过 100 MiB 上限")
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def output_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
 
@@ -269,13 +278,17 @@ def run(source, output):
         raise FileNotFoundError(source)
     if not output.parent.is_dir():
         raise FileNotFoundError(f"输出目录不存在：{output.parent}")
-    if os.path.lexists(output):
+    manifest = Path(str(output) + ".manifest.json")
+    if os.path.lexists(output) or os.path.lexists(manifest):
         raise FileExistsError(output)
 
     check_pdf_size(source, MAX_PDF_BYTES)
     source_hash = sha256(source, MAX_PDF_BYTES)
     pages = _extract(source)
     fd, temporary = tempfile.mkstemp(prefix=".ledger-pdf-text-", suffix=".xlsx", dir=output.parent)
+    manifest_temporary = None
+    output_reserved = False
+    manifest_reserved = False
     try:
         with os.fdopen(fd, "wb") as stream:
             expected_rows = _write_workbook(stream, source.name, source_hash, pages)
@@ -283,11 +296,43 @@ def run(source, output):
         if sha256(source, MAX_PDF_BYTES) != source_hash:
             raise ValueError("处理期间 PDF 源文件发生变化，结果不可发布")
         os.link(temporary, output)
+        output_reserved = True
+        output_hash = output_sha256(output)
+        manifest_data = {
+            "format_conversion_version": "0.2",
+            "source_path": str(source),
+            "output_path": str(output),
+            "manifest_path": str(manifest),
+            "source_sha256": source_hash,
+            "output_sha256": output_hash,
+            "source_format": ".pdf",
+            "output_format": ".xlsx",
+            "pages": len(pages),
+            "pages_with_text": sum(page["has_text"] for page in pages),
+            "number_candidates": sum(len(page["candidates"]) for page in pages),
+            "numeric_verification": "text_layer_candidates_require_manual_review",
+        }
+        manifest_fd, manifest_temporary = tempfile.mkstemp(prefix=".ledger-pdf-text-manifest-", suffix=".tmp", dir=output.parent)
+        with os.fdopen(manifest_fd, "w", encoding="utf-8") as stream:
+            json.dump(manifest_data, stream, ensure_ascii=False, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.link(manifest_temporary, manifest)
+        manifest_reserved = True
     finally:
+        if manifest_temporary and os.path.exists(manifest_temporary):
+            os.unlink(manifest_temporary)
+        if output_reserved and not manifest_reserved:
+            try:
+                os.unlink(output)
+            except FileNotFoundError:
+                pass
         if os.path.exists(temporary):
             os.unlink(temporary)
     return {
         "output": str(output),
+        "manifest": str(manifest),
+        "output_sha256": output_hash,
         "source_sha256": source_hash,
         "pages": len(pages),
         "pages_with_text": sum(page["has_text"] for page in pages),
