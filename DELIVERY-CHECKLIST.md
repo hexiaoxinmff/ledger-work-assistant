@@ -4,15 +4,15 @@
 
 - 仓库：`hexiaoxinmff/ledger-work-assistant`
 - 交付分支：`main`
-- 技能版本：`v0.97`
-- 适配脚本版本：`0.43`
+- 技能版本：`v0.101`
+- 适配脚本版本：`0.47`
 - 交付性质：通用能力包；不包含公司名称、真实台账、合同、人员资料、业务账号或密钥。
 
 ## 给同事的最短使用路径
 
 1. 从仓库下载 `ledger-organizer/` 文件夹，或按所用 Agent 平台的技能导入方式导入该文件夹。
 2. 新建会话，先让 Agent 报告实际加载的 `SKILL.md` 版本；“已下载”不等于“已加载”。
-3. 先使用 `ledger-organizer/references/platform-acceptance.md` 的虚构样例验收，不要直接放入真实台账。
+3. 先使用 `ledger-organizer/references/platform-acceptance.md` 的虚构样例验收，并按仓库根目录 `PLATFORM-ACCEPTANCE-REPORT-TEMPLATE.md` 留存脱敏记录，不要直接放入真实台账。
 4. 验收通过后，再提供真实文件，并先说明：源文件、目标格式、期间/范围、必须保留字段、匹配规则和是否需要可视化。
 5. 每次交付都要拿到：结果文件、待核实清单、来源定位、实际执行/回读/哈希核验说明。缺少任何一项时，不把结果称为正式财务结论。
 
