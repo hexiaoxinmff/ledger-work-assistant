@@ -302,6 +302,7 @@ class PdfTextToExcel(unittest.TestCase):
                 module.run(source, output)
             self.assertFalse(output.exists())
             self.assertEqual(list(directory.glob(".ledger-pdf-text-*")), [])
+            self.assertFalse(Path(str(output) + ".manifest.json").exists())
 
     def test_long_page_is_chunked_without_losing_offsets_or_text(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -330,6 +331,28 @@ class PdfTextToExcel(unittest.TestCase):
             finally:
                 workbook.close()
 
+
+    def test_manifest_publish_failure_removes_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source, output = directory / "synthetic.pdf", directory / "review.xlsx"
+            make_pdf(source, [b"BT /F1 12 Tf 72 720 Td (Amount 12.30) Tj ET"])
+            real_link = module.os.link
+            calls = []
+
+            def fail_on_manifest(src, dst):
+                calls.append(dst)
+                if len(calls) == 2:
+                    raise OSError("manifest link failure")
+                return real_link(src, dst)
+
+            with patch.object(module.os, "link", side_effect=fail_on_manifest):
+                with self.assertRaisesRegex(OSError, "manifest link failure"):
+                    module.run(source, output)
+            self.assertFalse(output.exists())
+            self.assertFalse(Path(str(output) + ".manifest.json").exists())
+            self.assertEqual(list(directory.glob(".ledger-pdf-text-*")), [])
+            self.assertEqual(list(directory.glob(".ledger-pdf-text-manifest-*")), [])
 
     def test_pdf_size_limit_runs_before_hash_or_extraction(self):
         with tempfile.TemporaryDirectory() as temporary:
