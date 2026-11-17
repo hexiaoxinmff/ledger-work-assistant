@@ -74,6 +74,8 @@ def markdown_to_xml(text: str, title: str) -> str:
     return f'''{XML_HEADER}<w:document xmlns:w="{NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>{body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>'''
 
 def write_docx(output: Path, title: str, markdown: str) -> None:
+    if not markdown.strip():
+        raise ValueError("教程内容不能为空")
     output = output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists():
