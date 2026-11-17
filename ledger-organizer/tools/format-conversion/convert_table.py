@@ -25,6 +25,17 @@ MAX_CSV_BYTES = 100 * 1024 * 1024
 MAX_CSV_RECORD_CHARS = 1_048_576
 MAX_CSV_PHYSICAL_LINE_CHARS = 65_536
 MAX_CSV_CELLS = 10_000_000
+NUMERIC_TEXT_RE = re.compile(r"^[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[eE][+-]?\d+)?$")
+
+def _numeric_candidate(value):
+    candidate=value.strip()
+    if not candidate or not NUMERIC_TEXT_RE.fullmatch(candidate):
+        return False
+    try:
+        Decimal(candidate.replace(",", ""))
+    except InvalidOperation:
+        return False
+    return True
 
 
 class _BoundedCsvLines:
@@ -67,6 +78,7 @@ def _csv_to_write_only_workbook(source, encoding, separator, expected_columns):
     row_count = 0
     column_count = None
     cell_count = 0
+    numeric_count = 0
     try:
         with open(source, encoding=encoding, newline="") as stream:
             for row in _csv_rows(stream, separator):
@@ -84,6 +96,7 @@ def _csv_to_write_only_workbook(source, encoding, separator, expected_columns):
                     raise ValueError("内容超过 Excel 容量")
                 row_count += 1
                 cell_count += column_count
+                numeric_count += sum(_numeric_candidate(value) for value in row)
                 if row_count > 1048576 or cell_count > MAX_CSV_CELLS:
                     raise ValueError("CSV 行数或单元格数超过安全处理上限")
                 cells = []
@@ -98,7 +111,7 @@ def _csv_to_write_only_workbook(source, encoding, separator, expected_columns):
         worksheet.close()
         workbook.close()
         raise
-    return workbook, row_count, column_count
+    return workbook, row_count, column_count, numeric_count
 
 
 MAX_XLSX_BYTES = 100 * 1024 * 1024
@@ -286,10 +299,10 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
     if not csv_to_xlsx and not xlsx_to_csv:raise ValueError('仅支持 CSV/TSV 与 XLSX 互转')
     input_limit=MAX_CSV_BYTES if csv_to_xlsx else MAX_XLSX_BYTES
     before=sha(source,input_limit)
-    csv_row_count = csv_column_count = None
+    csv_row_count = csv_column_count = csv_numeric_count = None
     if csv_to_xlsx:
         if encoding not in ('utf-8','utf-8-sig','utf-16','gb18030','gbk'):raise ValueError('不支持该编码，请确认实际编码')
-        w,csv_row_count,csv_column_count=_csv_to_write_only_workbook(source,encoding,separator,expected_columns)
+        w,csv_row_count,csv_column_count,csv_numeric_count=_csv_to_write_only_workbook(source,encoding,separator,expected_columns)
         rows=None
     elif xlsx_to_csv:
         rows=None
@@ -337,13 +350,15 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
                 finally:check.close()
         else:
             xlsx_row_count=0
+            numeric_count=0
             expected_digest=hashlib.sha256()
             with os.fdopen(fd,'w',encoding='utf-8-sig',newline='') as f:
                 writer=csv.writer(f,delimiter=separator)
                 if xlsx_to_csv:
                     def checked_rows():
-                        nonlocal xlsx_row_count
+                        nonlocal xlsx_row_count, numeric_count
                         for row in _xlsx_csv_rows(source,sheet,allow_display_loss,expected_columns):
+                            numeric_count += sum(_numeric_candidate(value) for value in row)
                             _update_row_digest(expected_digest,row)
                             xlsx_row_count+=1
                             yield row
@@ -384,6 +399,8 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
                 "encoding": encoding if csv_to_xlsx else None,
                 "delimiter": separator,
                 "sheet": sheet if xlsx_to_csv else None,
+                "numeric_candidate_cells": csv_numeric_count if csv_to_xlsx else numeric_count,
+                "numeric_verification": ("exact_text_roundtrip" if csv_to_xlsx else ("underlying_value_requires_manual_review" if allow_display_loss else "display_rules_checked")),
             }
             mfd, manifest_temp = tempfile.mkstemp(
                 prefix='.ledger-conversion-manifest-', suffix='.tmp', dir=parent
