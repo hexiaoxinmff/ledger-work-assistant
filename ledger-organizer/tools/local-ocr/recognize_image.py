@@ -194,7 +194,7 @@ def run(source, output):
         "来源文件名": source.name,
         "来源sha256": before,
         "识别引擎": "RapidOCR 3.10.0 / ONNX Runtime 1.20.1",
-        "模型文件哈希": runtime["model_hashes"],
+        "模型文件哈希": runtime.get("model_hashes", EXPECTED_MODELS),
         "识别状态": (
             "已检出候选，全部待人工复核"
             if records else "未检出文字候选；不能据此判断原图空白，需人工查看"
