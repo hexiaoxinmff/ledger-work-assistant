@@ -25,7 +25,7 @@ MAX_CSV_BYTES = 100 * 1024 * 1024
 MAX_CSV_RECORD_CHARS = 1_048_576
 MAX_CSV_PHYSICAL_LINE_CHARS = 65_536
 MAX_CSV_CELLS = 10_000_000
-NUMERIC_TEXT_RE = re.compile(r"^[+-]?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$")
+NUMERIC_TEXT_RE = re.compile(r"^[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[eE][+-]?\d+)?$")
 
 def _numeric_candidate(value):
     candidate=value.strip()
@@ -78,6 +78,7 @@ def _csv_to_write_only_workbook(source, encoding, separator, expected_columns):
     row_count = 0
     column_count = None
     cell_count = 0
+    numeric_count = 0
     try:
         with open(source, encoding=encoding, newline="") as stream:
             for row in _csv_rows(stream, separator):
@@ -348,13 +349,15 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
                 finally:check.close()
         else:
             xlsx_row_count=0
+            numeric_count=0
             expected_digest=hashlib.sha256()
             with os.fdopen(fd,'w',encoding='utf-8-sig',newline='') as f:
                 writer=csv.writer(f,delimiter=separator)
                 if xlsx_to_csv:
                     def checked_rows():
-                        nonlocal xlsx_row_count
+                        nonlocal xlsx_row_count, numeric_count
                         for row in _xlsx_csv_rows(source,sheet,allow_display_loss,expected_columns):
+                            numeric_count += sum(_numeric_candidate(value) for value in row)
                             _update_row_digest(expected_digest,row)
                             xlsx_row_count+=1
                             yield row
