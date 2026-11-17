@@ -4,7 +4,7 @@
 
 ## 安装和使用
 
-当前技能版本：v0.101。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
+当前技能版本：v0.102。先在新会话确认实际加载的 `SKILL.md` 版本；直接阅读本地文件与平台自动加载是不同状态。通用虚构试用需求和核对标准见 [平台验收](ledger-organizer/references/platform-acceptance.md)，三份样例随包位于 `ledger-organizer/tools/tests/fixtures/`。
 
 本机虚构回归入口：`python ledger-organizer/tools/run_checks.py`。默认执行基础环境/样例/转换/Word 提取测试；对账业务规则测试用 `--suite ledger`（需预装 pandas、openpyxl、PyYAML），PDF 文字层转表测试用 `--suite pdf-text`（需预装 pypdfium2、openpyxl），OCR 相关测试用 `--suite ocr`，全部用 `--suite all`。各组依赖须事先满足，报告保留失败、超时和未运行项目，不能将部分通过当成全功能通过。这些测试不包含真实账目、平台自主调用、界面或 OCR 准确率验收。
 
@@ -150,3 +150,8 @@ CSV/TSV↔XLSX 转换成功后会在结果旁独占创建同名 `.manifest.json`
 
 仓库回归通过不等于目标 Agent 平台已加载或调用成功。首次交付请只用虚构样例，并按 [平台实际验收报告模板](PLATFORM-ACCEPTANCE-REPORT-TEMPLATE.md) 记录实际加载版本、调用入口、结果回读、数字候选和数据保护检查；交付门槛与回滚规则见 [交付准备清单](DELIVERY-CHECKLIST.md)。模板中的反馈不得包含真实业务文件、编号、金额、截图、本机路径或运行清单。
 
+
+
+## 能力说明与 Word 使用教程
+
+当用户询问技能能做什么或希望留存操作说明时，技能会先给出能力导航和使用引导，并可自动生成通用 Word 教程。教程模板与安全边界见 [usage-guide.md](ledger-organizer/references/usage-guide.md)；无第三方依赖的生成入口为 `python ledger-organizer/tools/usage/create_usage_guide.py --output <新路径.docx>`。教程不包含真实业务数据，生成后需回读核验；这不替代具体业务文件的人工复核。
