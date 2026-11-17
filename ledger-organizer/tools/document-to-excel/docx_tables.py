@@ -1,5 +1,5 @@
 """Extract simple text-only DOCX tables to a traceable XLSX; no OCR."""
-import argparse, hashlib, os, tempfile, zipfile
+import argparse, hashlib, json, os, tempfile, zipfile
 from xml.etree import ElementTree as ET
 from openpyxl import Workbook, load_workbook
 
@@ -14,6 +14,14 @@ MAX_DOCX_CELLS = 1_000_000
 CHINESE_FINANCIAL_DIGITS = set("壹贰貳叁參肆伍陆陸柒捌玖零〇")
 CHINESE_NUMBER_DIGITS = set("零〇一二两兩三四五六七八九十拾百佰千仟万萬亿億兆廿卅卌")
 CHINESE_NUMBER_UNITS = set("十拾百佰千仟万萬亿億元圆圓角分厘")
+
+def output_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
 
 def contains_number(text):
     if any(char.isdigit() for char in text):
@@ -118,7 +126,8 @@ def run(source, output):
     parent = os.path.dirname(output)
     if not os.path.isdir(parent):
         raise FileNotFoundError(f"输出目录不存在：{parent}")
-    if os.path.lexists(output):
+    manifest = output + ".manifest.json"
+    if os.path.lexists(output) or os.path.lexists(manifest):
         raise FileExistsError(output)
 
     check_docx_size(source, MAX_DOCX_BYTES)
@@ -128,6 +137,9 @@ def run(source, output):
     fd, temporary = tempfile.mkstemp(
         prefix=".ledger-docx-", suffix=".xlsx", dir=parent
     )
+    manifest_temporary = None
+    output_reserved = False
+    manifest_reserved = False
     try:
         os.close(fd)
         try:
@@ -196,7 +208,37 @@ def run(source, output):
             check.close()
         # Hard-link publication is atomic and refuses to overwrite an existing path.
         os.link(temporary, output)
+        output_reserved = True
+        manifest_data = {
+            "format_conversion_version": "0.3",
+            "source_path": source,
+            "output_path": output,
+            "manifest_path": manifest,
+            "source_sha256": before,
+            "output_sha256": output_sha256(output),
+            "source_format": ".docx",
+            "output_format": ".xlsx",
+            "extracted_cells": len(rows),
+            "numeric_candidates": sum(contains_number(value) for _, _, _, value in rows),
+            "numeric_verification": "text_candidates_require_manual_review",
+        }
+        manifest_fd, manifest_temporary = tempfile.mkstemp(
+            prefix=".ledger-docx-manifest-", suffix=".tmp", dir=parent
+        )
+        with os.fdopen(manifest_fd, "w", encoding="utf-8") as stream:
+            json.dump(manifest_data, stream, ensure_ascii=False, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.link(manifest_temporary, manifest)
+        manifest_reserved = True
     finally:
+        if manifest_temporary and os.path.exists(manifest_temporary):
+            os.unlink(manifest_temporary)
+        if output_reserved and not manifest_reserved:
+            try:
+                os.unlink(output)
+            except FileNotFoundError:
+                pass
         if os.path.exists(temporary):
             os.unlink(temporary)
     return len(rows)
