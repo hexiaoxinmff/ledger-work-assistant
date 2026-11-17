@@ -66,8 +66,8 @@ def markdown_to_xml(text: str, title: str) -> str:
             blocks.append(para(line[2:], "Heading1"))
         elif line.startswith("- "):
             blocks.append(para(line[2:], "ListBullet"))
-        elif re.match(r"^\d+[.)]\\s+", line):
-            blocks.append(para(re.sub(r"^\d+[.)]\\s+", "", line), "ListNumber"))
+        elif re.match(r"^\d+[.)]\s+", line):
+            blocks.append(para(re.sub(r"^\d+[.)]\s+", "", line), "ListNumber"))
         else:
             blocks.append(para(line))
     body = "".join(blocks)
