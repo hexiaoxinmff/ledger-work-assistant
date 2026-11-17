@@ -7,6 +7,7 @@ from pathlib import Path
 
 SKIP_DIRS={".git",".github","__pycache__",".pytest_cache"}
 TEXT_SUFFIXES={".md",".txt",".py",".json",".yaml",".yml",".toml",".ini",".cfg",".sh",".ps1",".html",".xml",".csv",".tsv"}
+SENSITIVE_BINARY_SUFFIXES={".xlsx",".xls",".xlsm",".docx",".doc",".pdf",".png",".jpg",".jpeg",".gif",".bmp",".webp"}
 SUSPICIOUS_NAME_PATTERNS=(
     re.compile(r"codex-clipboard",re.I),
     re.compile(r"screenshot|screen[-_ ]?shot",re.I),
@@ -53,6 +54,8 @@ def scan(root):
         relative=path.relative_to(root).as_posix()
         if any(pattern.search(relative) for pattern in SUSPICIOUS_NAME_PATTERNS):
             findings.append({"kind":"suspicious_filename","path":relative})
+        if path.suffix.lower() in SENSITIVE_BINARY_SUFFIXES:
+            findings.append({"kind":"sensitive_binary_file","path":relative,"suffix":path.suffix.lower()})
         text=read_text(path)
         if text:
             for pattern in SECRET_PATTERNS:
@@ -62,7 +65,7 @@ def scan(root):
     versions,aligned=check_versions(root)
     return {"root":str(root),"versions":versions,"versions_aligned":aligned,"findings":findings,
             "passed":aligned and not findings,
-            "scope":"仅扫描仓库文件名、版本文件和可读文本；不证明业务内容不存在，也不读取仓库外资料。"}
+            "scope":"仅扫描仓库文件名、扩展名、版本文件和可读文本；不打开二进制业务文件，不证明业务内容不存在，也不读取仓库外资料。"}
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
