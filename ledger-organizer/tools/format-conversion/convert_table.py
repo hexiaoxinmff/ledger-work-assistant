@@ -394,7 +394,9 @@ def run(source,output,encoding='utf-8-sig',sheet=None,allow_display_loss=False,d
                 "columns": csv_column_count if csv_to_xlsx else expected_columns,
                 "encoding": encoding if csv_to_xlsx else None,
                 "delimiter": separator,
-                "sheet": sheet if xlsx_to_csv else None,\n                "numeric_candidate_cells": csv_numeric_count if csv_to_xlsx else numeric_count,\n                "numeric_verification": ("exact_text_roundtrip" if csv_to_xlsx else ("underlying_value_requires_manual_review" if allow_display_loss else "display_rules_checked")),
+                "sheet": sheet if xlsx_to_csv else None,
+                "numeric_candidate_cells": csv_numeric_count if csv_to_xlsx else numeric_count,
+                "numeric_verification": ("exact_text_roundtrip" if csv_to_xlsx else ("underlying_value_requires_manual_review" if allow_display_loss else "display_rules_checked")),
             }
             mfd, manifest_temp = tempfile.mkstemp(
                 prefix='.ledger-conversion-manifest-', suffix='.tmp', dir=parent
