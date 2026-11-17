@@ -10,6 +10,8 @@
 
 ## 给同事的最短使用路径
 
+完整的一句话安装、验收和反馈指令见仓库根目录 `COLLEAGUE-HANDOFF.md`；交付时优先把该文件发给同事。
+
 1. 从仓库下载 `ledger-organizer/` 文件夹，或按所用 Agent 平台的技能导入方式导入该文件夹。
 2. 新建会话，先让 Agent 报告实际加载的 `SKILL.md` 版本；“已下载”不等于“已加载”。
 3. 先使用 `ledger-organizer/references/platform-acceptance.md` 的虚构样例验收，并按仓库根目录 `PLATFORM-ACCEPTANCE-REPORT-TEMPLATE.md` 留存脱敏记录，不要直接放入真实台账。

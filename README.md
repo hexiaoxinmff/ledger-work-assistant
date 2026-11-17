@@ -155,3 +155,8 @@ CSV/TSV↔XLSX 转换成功后会在结果旁独占创建同名 `.manifest.json`
 ## 能力说明与 Word 使用教程
 
 当用户询问技能能做什么或希望留存操作说明时，技能会先给出能力导航和使用引导，并可自动生成通用 Word 教程。教程模板与安全边界见 [usage-guide.md](ledger-organizer/references/usage-guide.md)；无第三方依赖的生成入口为 `python ledger-organizer/tools/usage/create_usage_guide.py --output <新路径.docx>`。教程不包含真实业务数据，生成后需回读核验；这不替代具体业务文件的人工复核。
+
+
+## 同事交付
+
+首次交付请直接使用 [同事交付与验收说明](COLLEAGUE-HANDOFF.md)。其中包含一条可复制给 Agent 的安装与验收指令、版本确认、虚构样例、Word 教程回读、数字核验和数据保护门槛。目标 Agent 未完成虚构验收前，不要提供真实业务资料。
