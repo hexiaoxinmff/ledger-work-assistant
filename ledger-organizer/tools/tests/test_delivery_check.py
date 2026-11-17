@@ -27,5 +27,17 @@ class DeliveryCheck(unittest.TestCase):
    self.assertFalse(report["passed"])
    self.assertTrue(any(item["kind"]=="suspicious_filename" for item in report["findings"]))
 
+ def test_sensitive_binary_extension_fails_without_opening_content(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   root=Path(tmp)
+   (root/"ledger-organizer/tools/fcs-adapted/scripts").mkdir(parents=True)
+   (root/"ledger-organizer/tools/fcs-adapted/scripts/version.py").write_text('SKILL_VERSION = "0.1"\\n',encoding="utf-8")
+   (root/"ledger-organizer/SKILL.md").write_text("# 费用与收款台账整理助手 v0.1\\n",encoding="utf-8")
+   (root/"README.md").write_text("当前技能版本：v0.1\\n",encoding="utf-8")
+   (root/"业务资料.pdf").write_bytes(b"binary content")
+   report=module.scan(root)
+   self.assertFalse(report["passed"])
+   self.assertTrue(any(item["kind"]=="sensitive_binary_file" for item in report["findings"]))
+
 if __name__=="__main__":
  unittest.main()
