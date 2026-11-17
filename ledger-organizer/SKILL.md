@@ -3,7 +3,7 @@ name: ledger-organizer
 description: 根据当前平台能力转换文档、表格、PDF 和图片格式，整理用户提供的费用、收款或欠费台账，按确认的字段和规则形成可追溯的结果与待核实清单；不代替财务审核、入账或开票。
 ---
 
-# 费用与收款台账整理助手 v0.97
+# 费用与收款台账整理助手 v0.98
 
 ## 范围与能力
 需要验证下载包的脚本时，可运行 `python tools/run_checks.py` 执行基础虚构回归；`--suite ledger` 执行对账业务规则回归（需预装 pandas、openpyxl、PyYAML）；`--suite pdf-text` 执行 PDF 文字层转 Excel 回归（需预装 pypdfium2、openpyxl）；`--suite ocr` 单测 OCR 相关结构/复核；`--suite all` 执行全部组。报告列出实际解释器、每组输出、失败/超时及未运行组；不安装依赖。仅对选择且实际执行的组报告通过，不能代替目标平台或真实业务验收。
@@ -346,3 +346,8 @@ DOCX→XLSX 输出新增“来源”工作表，记录源文件名、源文件 S
 ## v0.97 通用转换运行清单
 
 CSV/TSV↔XLSX 转换在结果旁独占创建 `.manifest.json`，记录源/输出路径、SHA-256、格式、行数、列数以及分隔符或工作表等运行信息。只有结果和清单都成功发布才保留结果；清单发布失败会回收本次输出。清单可能包含本地路径和文件指纹，应与结果文件一起按敏感资料保管；它不是业务核验或数字正确性的证明。
+
+
+## v0.98 数字核验摘要
+
+CSV/TSV↔XLSX 转换清单新增数字候选单元格数量和核验策略：文本导入标为 `exact_text_roundtrip`；XLSX 导出在未允许显示格式损失时标为 `display_rules_checked`，明确允许底层值导出时标为 `underlying_value_requires_manual_review`。这只是转换证据摘要，不是金额或业务含义确认；仍须逐项对照原件。
